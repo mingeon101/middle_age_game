@@ -136,7 +136,7 @@ export function createWorld(host, select, publish, openOffice) {
   const stoneColors=new Set(['#909188','#b4ad93','#787b74','#9b988f']);
   function material(hex) {
     if (!mats.has(hex)) mats.set(hex,new THREE.MeshStandardMaterial({
-      color:hex,flatShading:true,map:stoneColors.has(hex)?stoneTexture:null
+      color:hex,flatShading:true,map:stoneColors.has(hex)?stoneTexture:hex==='#b6aa88'?fieldTexture:null
     }));
     return mats.get(hex);
   }
@@ -327,7 +327,7 @@ export function createWorld(host, select, publish, openOffice) {
   reticle.setAttribute('aria-hidden','true');
   reticle.hidden=true;
   host.append(reticle);
-  const lantern=new THREE.PointLight('#ffd196',25,11,2);
+  const lantern=new THREE.PointLight('#ffd196',17,10,2);
   lantern.visible=false;
   scene.add(lantern);
   const labels = castleGroups.map((group,id) => {

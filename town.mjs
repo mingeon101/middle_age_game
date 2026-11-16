@@ -7,6 +7,7 @@ export function buildTown({x,z,id,flag,height,box,mesh,shadow,banners,scene}) {
   town.userData.castle=id;
   scene.add(town);
   const obstacles=[], interiors=[];
+  const jarShape=new THREE.CylinderGeometry(.19,.24,.36,8);
   const stone='#b4ad93', cut='#9b988f', dark='#665d50', oak='#6c4930';
   const roofs=['#69463e','#7d5141','#586169','#8d6547'];
   const local=(w,h,d,color,dx,y,dz)=>box(town,w,h,d,color,dx,y,dz);
@@ -97,6 +98,18 @@ export function buildTown({x,z,id,flag,height,box,mesh,shadow,banners,scene}) {
     local(door+.4,h-2.68,thick,wallColor,dx,(h+2.68)/2,front);
     local(door+.46,.19,.36,oak,dx,2.73,front+.13);
     if(!palace){
+      for(let i=1;i<Math.ceil(w/.58);i++){
+        const line=dx-w/2+i*.58;
+        if(line<dx+w/2-.07)local(.021,.019,d-.22,'#6a533d',line,.108,dz);
+      }
+      for(const y of [.23,2.88]){
+        local(w-.13,.125,.17,oak,dx,y,back+.24);
+        for(const sign of [-1,1])local(.17,.125,d-.28,oak,dx+sign*(w/2-.18),y,dz);
+      }
+      for(const sign of [-1,1]){
+        local(.15,h-.2,.18,oak,dx+sign*(w/2-.21),h/2,back+.22);
+        local(.16,.2,d-.21,oak,dx+sign*(w/3),h-.34,dz);
+      }
       local(w+.28,.2,d+.2,oak,dx,h-.04,dz);
       const peak=1.9;
       // A pitched roof has an attic silhouette and an exposed interior ceiling.
@@ -183,6 +196,17 @@ export function buildTown({x,z,id,flag,height,box,mesh,shadow,banners,scene}) {
         }
         local(.9,.7,.85,'#75593d',dx-2.58,.41,back+1);
         local(.48,.51,.13,flag,dx+2.48,2.9,front+.41);
+        for(let row=0;row<3;row++){
+          const shelfY=1.03+row*.54;
+          local(4.65,.12,.63,oak,dx,shelfY,back+.45);
+          for(let j=0;j<6;j++){
+            if((row+j)%5===0)continue;
+            const slot=dx-1.85+j*.73;
+            const jar=mesh(town,jarShape,roofs[(j+row)%4],slot,shelfY+.23,back+.47);
+            jar.rotation.y=j*.26;
+            local(.18,.075,.18,'#cab08b',slot,shelfY+.43,back+.47);
+          }
+        }
       }else{
         furniture(dx+2.05,dz-.7,1.65,1.03,'#866749',.8);
         solid(1.38,.27,2.21,'#6f5241',dx-2.22,.3,dz-.62);
@@ -200,7 +224,7 @@ export function buildTown({x,z,id,flag,height,box,mesh,shadow,banners,scene}) {
   const batches=new Map();
   town.traverse(node=>{
     if(node.isMesh){node.castShadow=true;node.receiveShadow=true;}
-    if(node.isMesh&&node.geometry.type==='BoxGeometry'){
+    if(node.isMesh&&(node.geometry.type==='BoxGeometry'||node.geometry===jarShape)){
       const key=node.material.id;
       if(!batches.has(key))batches.set(key,[]);
       batches.get(key).push(node);
