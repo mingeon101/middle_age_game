@@ -6,8 +6,8 @@ import {
 import {
   getDatabase, ref, get, set, remove, onValue, runTransaction, onDisconnect
 } from 'https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js';
-import { castles, room, normalize, join, due, advance, command, defenseOf, weaponCost, atWar } from './realm.mjs';
-import { createWorld, worldScale } from './world.mjs';
+import { castles, room, normalize, join, due, advance, command, defenseOf, weaponCost, atWar } from './realm.mjs?v=frontiers';
+import { createWorld, worldScale } from './world.mjs?v=frontiers';
 
 const app = initializeApp({
   apiKey: 'AIzaSyDqc1vQ_nLlsWZJoh6KUB8fgMBbHqZqJz4',
@@ -113,6 +113,7 @@ function closeRoom() {
   if(ctx&&document.fullscreenElement) document.exitFullscreen().catch(()=>{});
   $('statsDialog').close();
   $('officeDialog').close();
+  $('chartDialog').close();
   $('play').hidden=true;
   $('roomGate').hidden=!auth.currentUser;
   return cleanup;
@@ -141,7 +142,8 @@ function worldSnapshot() {
 function startWorld() {
   if (!world&&!worldFailed) {
     try {
-      world=createWorld($('map'),select,sendPosition,openOffice);
+      world=createWorld($('map'),select,sendPosition,openOffice,
+        ()=>(game?serverNow()-game.createdAt:0)/1000);
     } catch (error) {
       worldFailed=true;
       const box=document.createElement('p');
@@ -153,6 +155,7 @@ function startWorld() {
   }
   world?.activate(true);
 }
+$('map').addEventListener('kingdom-weather',event=>text('weatherReading',event.detail));
 async function registerPosition(ctx) {
   if (ctx!==current||!me||!connected||ctx.present||ctx.registering) return;
   ctx.registering=true;
@@ -365,24 +368,33 @@ $('attack').onsubmit=event=>{event.preventDefault();act({type:'attack',to:select
 document.querySelectorAll('[data-action]').forEach(button=>button.onclick=()=>act({type:button.dataset.action,to:selected}));
 $('statsButton').onclick=toggleStats;
 function toggleStats() {
-  if(!game||$('officeDialog').open)return;
+  if(!game||$('officeDialog').open||$('chartDialog').open)return;
   if($('statsDialog').open){$('statsDialog').close();return;}
   updateStats();
   world?.activate(false);
   $('statsDialog').showModal();
 }
+$('chartButton').onclick=toggleChart;
+function toggleChart() {
+  if(!game||!world||$('statsDialog').open||$('officeDialog').open)return;
+  if($('chartDialog').open){$('chartDialog').close();return;}
+  world.showChart($('realmChart'));
+  world.activate(false);
+  $('chartDialog').showModal();
+}
 window.addEventListener('keydown',event=>{
   if(!current||event.repeat||event.ctrlKey||event.metaKey||event.altKey||/INPUT|TEXTAREA|SELECT/.test(event.target.tagName))return;
   if(event.code==='KeyP'){event.preventDefault();toggleStats();}
   if(event.code==='KeyF'){event.preventDefault();toggleFullscreen();}
-  if(event.code==='KeyV'&&!$('officeDialog').open&&!$('statsDialog').open){event.preventDefault();changeView();}
+  if(event.code==='KeyM'){event.preventDefault();toggleChart();}
+  if(event.code==='KeyV'&&!$('officeDialog').open&&!$('statsDialog').open&&!$('chartDialog').open){event.preventDefault();changeView();}
 });
-for(const id of ['statsDialog','officeDialog']){
+for(const id of ['statsDialog','officeDialog','chartDialog']){
   $(id).addEventListener('close',()=>world?.activate(!!current));
 }
 
 function openOffice(){
-  if (!me||!world?.atOffice()||$('officeDialog').open||$('statsDialog').open)return;
+  if (!me||!world?.atOffice()||$('officeDialog').open||$('statsDialog').open||$('chartDialog').open)return;
   const list=castles.flatMap((_,id)=>id===me.id?[]:[new Option(castle(id),String(id))]);
   $('officeTarget').replaceChildren(...list);
   if(selected!==me.id)$('officeTarget').value=String(selected);
@@ -536,6 +548,7 @@ function render() {
     const li=document.createElement('li');li.textContent=log;return li;
   }));
   if($('statsDialog').open)updateStats();
+  if($('chartDialog').open)world?.showChart($('realmChart'));
   renderOffice();
 }
 setInterval(()=>{

@@ -17,7 +17,7 @@ function log(game,message) {
 }
 
 export function room(now,owner) {
-  return {owner, version:1, harvest:now+20000, citizensAt:now+30000, aiAt:now+15000, winner:null,
+  return {owner, version:1, createdAt:now, harvest:now+20000, citizensAt:now+30000, aiAt:now+15000, winner:null,
     players:castles.map((_,id)=>({id,lord:'AI 영주',ai:true,gold:120,food:90,army:30,farm:1,wall:1,fame:0,
       citizens:8,grossIncome:0,nationalIncome:0,taxIncome:0,goodsSold:0,trained:0,weapon:1})),
     members:{}, logs:[], offers:[], marches:[], truces:[], allies:[], wars:[]};
@@ -29,6 +29,7 @@ export function normalize(data) {
   }
   data.members ??= {};
   data.winner ??= null;
+  data.createdAt ??= data.harvest-20000;
   for(const player of data.players)player.weapon??=1;
   return data;
 }

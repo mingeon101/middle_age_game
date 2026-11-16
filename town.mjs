@@ -1,12 +1,14 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 
+export const townEdge=32;
+
 export function buildTown({x,z,id,flag,height,box,mesh,shadow,banners,scene}) {
   const town=new THREE.Group();
   const level=height(x,z);
   town.position.set(x,level,z);
   town.userData.castle=id;
   scene.add(town);
-  const obstacles=[], interiors=[];
+  const obstacles=[], interiors=[], guards=[], lamps=[];
   const jarShape=new THREE.CylinderGeometry(.19,.24,.36,8);
   const stone='#b4ad93', cut='#9b988f', dark='#665d50', oak='#6c4930';
   const roofs=['#69463e','#7d5141','#586169','#8d6547'];
@@ -37,17 +39,17 @@ export function buildTown({x,z,id,flag,height,box,mesh,shadow,banners,scene}) {
       local(alongX?.84:.8,.64,alongX?.8:.84,stone,dx+(alongX?p:0),h+.3,dz+(alongX?0:p));
     }
   }
-  function wall(dx,dz,w,d) {
+  function wall(dx,dz,w,d,outward) {
     solid(w,5.9,d,stone,dx,2.95,dz);
     local(w+.22,.21,d+.3,cut,dx,5.84,dz);
     const alongX=w>d;
-    crenellate(dx,dz,Math.max(w,d),alongX,6);
+    crenellate(dx+(alongX?0:outward*.93),dz+(alongX?outward*.93:0),Math.max(w,d),alongX,6);
   }
-  const edge=24;
-  wall(0,-edge,48,1.5);
+  const edge=townEdge, gateWidth=edge-3.5;
+  wall(0,-edge,edge*2,2.65,-1);
   for(const sign of [-1,1]){
-    wall(sign*edge,0,1.5,48);
-    wall(sign*13.75,edge,20.5,1.65);
+    wall(sign*edge,0,2.65,edge*2,sign);
+    wall(sign*(edge+3.5)/2,edge,gateWidth,2.65,1);
     for(const direction of [-1,1]){
       const tx=sign*edge,tz=direction*edge;
       solid(5,9.2,5,stone,tx,4.6,tz);
@@ -68,17 +70,63 @@ export function buildTown({x,z,id,flag,height,box,mesh,shadow,banners,scene}) {
     local(.25,1.2,.18,dark,sign*4.85,6.8,edge+1.54);
     local(.12,3.9,1,oak,sign*2.95,1.93,edge+.22);
     local(.32,1.7,.28,'#3a342c',sign*2.65,3.45,edge+1.2);
+    local(.34,.25,.31,'#a77243',sign*2.65,4.15,edge+1.35);
+    lamps.push({x:x+sign*2.65,y:level+4.4,z:z+edge+1.46});
   }
   local(2.2,.46,.28,cut,0,5.18,edge+1.17);
   local(.69,.82,.2,flag,0,6.62,edge+1.25);
   flagAt(0,10.6,edge);
+  const spearPoint=new THREE.ConeGeometry(.12,.45,5);
+  const helmetShape=new THREE.DodecahedronGeometry(.34,0);
+  function guard(gx,gy,gz,heading,patrolAxis) {
+    const model=new THREE.Group();
+    model.position.set(gx,gy,gz);
+    model.rotation.y=heading;
+    const part=(w,h,d,color,bx,by,bz)=>box(model,w,h,d,color,bx,by,bz);
+    const cloth='#70665a', iron='#848b8a', leather='#493b31', darkIron='#4d585d';
+    part(.72,.83,.49,cloth,0,1.1,0);
+    part(.64,.54,.14,iron,0,1.23,.247);
+    part(.77,.12,.53,leather,0,.82,0);
+    part(.42,.41,.43,'#bf8968',0,1.81,0);
+    mesh(model,helmetShape,iron,0,2.015,0);
+    part(.72,.075,.58,darkIron,0,1.96,0);
+    part(.087,.25,.082,darkIron,0,1.84,.241);
+    const legs=[];
+    for(const side of [-1,1]){
+      const limb=new THREE.Group();
+      limb.position.set(side*.195,.8,0);
+      box(limb,.19,.74,.24,cloth,0,-.37,0);
+      box(limb,.23,.21,.43,leather,0,-.675,.07);
+      model.add(limb);
+      legs.push(limb);
+      part(.24,.49,.27,iron,side*.463,1.27,0);
+      part(.19,.18,.2,leather,side*.476,1.02,.036);
+    }
+    part(.61,.69,.13,flag,-.48,1.05,.229).rotation.z=-.12;
+    part(.11,.56,.04,'#e3c994',-.48,1.07,.306).rotation.z=-.12;
+    part(.065,2.45,.065,oak,.58,1.27,.11);
+    mesh(model,spearPoint,iron,.58,2.63,.11);
+    model.traverse(node=>{if(node.isMesh){node.castShadow=true;node.receiveShadow=true;}});
+    town.add(model);
+    guards.push({model,legs,x:gx,z:gz,heading,patrolAxis});
+  }
+  guard(-4.05,0,edge+3.8,0,null);
+  guard(4.05,0,edge+3.8,0,null);
+  for(const side of [-1,1]){
+    guard(side*(edge-.45),6.05,-11,side*Math.PI/2,'z');
+    guard(side*(edge-.45),6.05,13,side*Math.PI/2,'z');
+    guard(side*14.7,6.05,-edge+.44,Math.PI,'x');
+    guard(side*14.7,6.05,edge-.44,0,'x');
+  }
   const paving='#a9a18c';
-  local(6,.085,54,paving,0,.044,2);
-  local(42,.086,4.2,paving,0,.045,5.5);
-  local(24,.083,4.8,paving,0,.043,-16);
-  local(8,.086,9,'#918b7e',0,.045,24.2);
-  for(let i=0;i<24;i++) {
-    local(5.54,.026,.05,'#756f61',0,.091,-23+i*2.15);
+  local(6,.085,edge*2+6,paving,0,.044,2);
+  local(edge*2-8,.086,4.2,paving,0,.045,5.5);
+  local(edge*2-8,.084,3.1,paving,0,.044,-16);
+  local(edge*2-8,.083,3.7,paving,0,.043,25.6);
+  local(8,.086,9,'#918b7e',0,.045,edge+.2);
+  for(const side of [-1,1])local(2.4,.082,edge*2-11,paving,side*17.1,.044,1);
+  for(let i=0;i<31;i++) {
+    local(5.54,.026,.05,'#756f61',0,.091,-29+i*2.15);
   }
 
   function room({dx,dz,w,d,h,roof,kind}) {
@@ -179,9 +227,12 @@ export function buildTown({x,z,id,flag,height,box,mesh,shadow,banners,scene}) {
   }
   // The other front-facing doors lead to furnished shops and homes.
   for(const side of [-1,1]){
-    for(let row=0;row<3;row++){
-      const dx=side*(row===2?14.7:10.75), dz=13.9-row*13.2;
-      const shop=row===0;
+    const lots=[
+      [10.75,13.9,true],[10.75,.7,false],[10.75,-12.5,false],
+      [23.1,20.5,true],[23.1,7.2,true],[23.1,-6.3,false],[23.1,-20,false]
+    ];
+    for(const [row,[lane,dz,shop]] of lots.entries()){
+      const dx=side*lane;
       const {front,back}=room({dx,dz,w:7.9,d:6.6,h:3.85,roof:roofs[(row+id+(side>0?1:0))%4],kind:shop?'shop':'house'});
       if(shop){
         const awning=local(6.9,.13,1.75,'#d8b788',dx,3.1,front+.78);
@@ -220,11 +271,12 @@ export function buildTown({x,z,id,flag,height,box,mesh,shadow,banners,scene}) {
     local(.13,2.4,.14,'#634d38',wx,1.2,wz);
     local(.32,.36,.29,'#d0a35e',wx,2.29,wz);
     local(.45,.13,.43,'#5c5141',wx,2.52,wz);
+    lamps.push({x:x+wx,y:level+2.31,z:z+wz});
   }
   const batches=new Map();
   town.traverse(node=>{
     if(node.isMesh){node.castShadow=true;node.receiveShadow=true;}
-    if(node.isMesh&&(node.geometry.type==='BoxGeometry'||node.geometry===jarShape)){
+    if(node.isMesh&&node.parent===town&&(node.geometry.type==='BoxGeometry'||node.geometry===jarShape)){
       const key=node.material.id;
       if(!batches.has(key))batches.set(key,[]);
       batches.get(key).push(node);
@@ -259,7 +311,7 @@ export function buildTown({x,z,id,flag,height,box,mesh,shadow,banners,scene}) {
     town.add(batch);
   }
   return {
-    group:town, obstacles, interiors,
+    group:town, obstacles, interiors, guards, lamps,
     spawn:{x,z:z+9},
     office:{x,z:z+deskZ+2.0,radius:2.6,level},
     center:{x,z,level}

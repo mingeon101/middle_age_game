@@ -1,34 +1,38 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
-import { castles } from './realm.mjs';
-import { buildTown } from './town.mjs';
+import { castles } from './realm.mjs?v=frontiers';
+import { buildTown, townEdge } from './town.mjs?v=frontiers';
+import { climateAt, createClimate } from './climate.mjs?v=frontiers';
+import { createChart } from './chart.mjs?v=frontiers';
 
-export const worldScale=2.4;
+export const worldScale=3.6;
 const limit = 92*worldScale;
 const points = castles.map(([, , x,z]) => [(x-50)*2*worldScale,(z-50)*2*worldScale]);
-const river = z => -45+15*Math.sin(z/64);
-const crossings=[-145,-31,111,164];
+const river = z => -66+23*Math.sin(z/94)+5*Math.sin(z/31);
+const crossings=[-218,-47,165,244];
 function terrain(x,z) {
-  const undulations=5.5*Math.sin(x/43)*Math.cos(z/61)+2.6*Math.sin((x-z)/34);
-  const mountains=31*Math.exp(-((x+65)**2/12500+(z+181)**2/2300))+
-    23*Math.exp(-((x-138)**2/9600+(z-173)**2/2700));
+  const undulations=7.5*Math.sin(x/78)*Math.cos(z/92)+
+    3.4*Math.sin((x-z)/51)+1.2*Math.cos(x/27+z/39);
+  const mountains=40*Math.exp(-((x+109)**2/22500+(z+265)**2/5200))+
+    34*Math.exp(-((x-202)**2/18500+(z-258)**2/6200));
   return undulations+mountains;
 }
 function height(x,z) {
   let y=terrain(x,z)-5.3*Math.exp(-((x-river(z))**2)/68);
   for(const [cx,cz] of points){
     const distance=Math.max(Math.abs(x-cx),Math.abs(z-cz));
-    if(distance>=42)continue;
-    const t=clamp((distance-29)/13,0,1);
+    if(distance>=53)continue;
+    const t=clamp((distance-37)/16,0,1);
     y=THREE.MathUtils.lerp(terrain(cx,cz),y,t*t*(3-2*t));
   }
   return y;
 }
 const clamp = (n,min,max) => Math.min(max,Math.max(min,n));
 
-export function createWorld(host, select, publish, openOffice) {
+export function createWorld(host, select, publish, openOffice, elapsed) {
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2('#a4b7bb',.0041);
-  scene.add(new THREE.HemisphereLight('#d8ebff','#524c3b',1.55));
+  scene.fog = new THREE.FogExp2('#a4b7bb',.0032);
+  const ambient=new THREE.HemisphereLight('#d8ebff','#524c3b',1.55);
+  scene.add(ambient);
   const sun = new THREE.DirectionalLight('#ffe0a7',2.75);
   sun.castShadow=true;
   sun.shadow.mapSize.set(1024,1024);
@@ -54,23 +58,29 @@ export function createWorld(host, select, publish, openOffice) {
     uniforms:{
       horizon:{value:new THREE.Color('#baccd0')},
       zenith:{value:new THREE.Color('#52779f')},
-      light:{value:new THREE.Vector3(-.73,.55,.28).normalize()}
+      light:{value:new THREE.Vector3(-.73,.55,.28).normalize()},
+      time:{value:0},clouds:{value:0},lightStrength:{value:1}
     },
     vertexShader:`varying vec3 direction;
       void main(){direction=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
     fragmentShader:`varying vec3 direction;
       uniform vec3 horizon;uniform vec3 zenith;uniform vec3 light;
+      uniform float time;uniform float clouds;uniform float lightStrength;
       float random(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
       float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
         return mix(mix(random(i),random(i+vec2(1,0)),f.x),mix(random(i+vec2(0,1)),random(i+vec2(1,1)),f.x),f.y);}
       void main(){vec3 d=normalize(direction);float h=max(d.y,0.0);
         vec3 col=mix(horizon,zenith,pow(h,.53));
-        vec2 q=d.xz/(.22+h)*3.8;
+        vec2 q=d.xz/(.22+h)*3.8+vec2(time*.011,time*.008);
         float n=.55*noise(q)+.27*noise(q*2.06)+.12*noise(q*4.18)+.06*noise(q*8.);
-        float clouds=smoothstep(.49,.68,n)*smoothstep(.02,.23,h)*(1.-smoothstep(.57,.98,h));
-        col=mix(col,vec3(.84,.87,.87),clouds*.8);
+        float layer=smoothstep(.50-clouds*.22,.68-clouds*.12,n)*smoothstep(.02,.20,h)*(1.-smoothstep(.74,1.,h));
+        col=mix(col,mix(vec3(.19,.25,.36),vec3(.84,.87,.87),lightStrength),layer*(.76+clouds*.2));
         float glow=max(dot(d,light),0.);
-        col+=vec3(.34,.19,.075)*pow(glow,12.)+vec3(.65,.49,.27)*pow(glow,190.);
+        col+=(vec3(.34,.19,.075)*pow(glow,12.)+vec3(.65,.49,.27)*pow(glow,190.))*lightStrength;
+        vec2 starGrid=vec2(atan(d.z,d.x),asin(d.y))*165.;
+        float spark=1.-smoothstep(0.,.2,length(fract(starGrid)-.5));
+        float stars=step(.992,random(floor(starGrid)))*spark*smoothstep(.10,.4,h);
+        col+=vec3(.36,.46,.60)*stars*(1.-lightStrength)*(1.-layer)*(1.-clouds);
         gl_FragColor=vec4(col,1.);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -79,7 +89,8 @@ export function createWorld(host, select, publish, openOffice) {
   sky.renderOrder=-100;
   sky.frustumCulled=false;
   scene.add(sky);
-  const geometry = new THREE.PlaneGeometry(505,505,176,176);
+  const climate=createClimate(scene,sky.material,sun,ambient);
+  const geometry = new THREE.PlaneGeometry(740,740,214,214);
   geometry.rotateX(-Math.PI/2);
   const verts = geometry.attributes.position;
   const colors = [], fieldUV = geometry.attributes.uv;
@@ -170,7 +181,7 @@ export function createWorld(host, select, publish, openOffice) {
   }
 
   const riverVerts=[];
-  for (let z=-248;z<248;z+=2) {
+  for (let z=-364;z<364;z+=2) {
     const x=river(z), next=river(z+2);
     const y=height(x,z)+2.1, nextY=height(next,z+2)+2.1;
     riverVerts.push(x-4,y,z,next-4,nextY,z+2,x+4,y,z,
@@ -198,7 +209,9 @@ export function createWorld(host, select, publish, openOffice) {
   scene.add(new THREE.Mesh(water,waterMat));
 
   const routeMat = new THREE.MeshStandardMaterial({color:'#ae9b73',map:fieldTexture,side:THREE.DoubleSide});
+  const roads=[];
   function route(a,b) {
+    roads.push([a,b]);
     const vertices=[];
     for (let i=0;i<32;i++) {
       const point = t => [THREE.MathUtils.lerp(a[0],b[0],t),THREE.MathUtils.lerp(a[1],b[1],t)];
@@ -219,15 +232,15 @@ export function createWorld(host, select, publish, openOffice) {
     road.receiveShadow=true;
     scene.add(road);
   }
-  function gate(i){return [points[i][0],points[i][1]+26];}
-  const paths=[[0,1,-145],[1,2,-31],[2,3,164],[3,0,111]];
+  function gate(i){return [points[i][0],points[i][1]+townEdge+3];}
+  const paths=[[0,1,crossings[0]],[1,2,crossings[1]],[2,3,crossings[3]],[3,0,crossings[2]]];
   for (const [a,b,z] of paths){
     const x=river(z), start=gate(a),end=gate(b);
     const startSide=Math.sign(start[0]-river(start[1])),endSide=Math.sign(end[0]-river(end[1]));
     const aRoad=[start[0],start[1]+10],bRoad=[end[0],end[1]+10];
     route(start,aRoad);route(bRoad,end);
     if(startSide===endSide){
-      const bendX=Math.max(start[0],end[0])+32;
+      const bendX=Math.max(start[0],end[0])+townEdge+10;
       route(aRoad,[bendX,aRoad[1]]);
       route([bendX,aRoad[1]],[bendX,bRoad[1]]);
       route([bendX,bRoad[1]],bRoad);
@@ -243,6 +256,7 @@ export function createWorld(host, select, publish, openOffice) {
       box(scene,.23,1.1,.25,'#6d5237',x+dx,y+.5,z+side*1.89);
     }
   }
+  let drawChart;
 
   let randomState=92471;
   function random() {
@@ -250,12 +264,12 @@ export function createWorld(host, select, publish, openOffice) {
     return randomState/4294967296;
   }
   for (let ridge=0;ridge<3;ridge++) {
-    const radius=276+ridge*63;
+    const radius=400+ridge*75;
     const vertices=[];
     let previous;
     for(let i=0;i<=56;i++){
       const angle=i/56*Math.PI*2;
-      const peak=[Math.cos(angle)*radius,30+ridge*11+random()*(32+ridge*16),Math.sin(angle)*radius];
+      const peak=[Math.cos(angle)*radius,35+ridge*13+random()*(48+ridge*18),Math.sin(angle)*radius];
       if(previous){
         const c=[previous[0]*.91,-13,previous[2]*.91], d=[peak[0]*.91,-13,peak[2]*.91];
         vertices.push(...previous,...c,...peak,...peak,...c,...d);
@@ -271,9 +285,13 @@ export function createWorld(host, select, publish, openOffice) {
   }
   const cone=new THREE.ConeGeometry(1,1,6), rock=new THREE.DodecahedronGeometry(1,0);
   const trees=[];
-  for (let i=0;i<820;i++) {
-    const x=random()*452-226,z=random()*452-226,y=height(x,z);
-    if (Math.abs(river(z)-x)<10||points.some(([a,b])=>Math.max(Math.abs(a-x),Math.abs(b-z))<29)) continue;
+  const fields=points.flatMap(([x,z],id)=>[-1,1].map(side=>({
+    x:x+side*20,z:z+townEdge+20+id*2, w:18,d:18,id
+  })));
+  const onField=(x,z)=>fields.some(f=>Math.abs(x-f.x)<f.w/2+2&&Math.abs(z-f.z)<f.d/2+2);
+  for (let i=0;i<1350;i++) {
+    const x=random()*700-350,z=random()*700-350,y=height(x,z);
+    if (Math.abs(river(z)-x)<10||onField(x,z)||points.some(([a,b])=>Math.max(Math.abs(a-x),Math.abs(b-z))<townEdge+6)) continue;
     if (z>0&&x>-73&&x<48&&random()<.7) continue;
     if (y>18) {
       const stone=mesh(scene,rock,'#838475',x,y+.7,z);
@@ -285,7 +303,7 @@ export function createWorld(host, select, publish, openOffice) {
   }
   const canopy=new THREE.InstancedMesh(cone,material('#5b7449'),trees.length*2);
   const trunks=new THREE.InstancedMesh(new THREE.CylinderGeometry(.18,.29,1,6),material('#665039'),trees.length);
-  const tufts=new THREE.InstancedMesh(cone,material('#929654'),1050);
+  const tufts=new THREE.InstancedMesh(cone,material('#929654'),1780);
   const dummy=new THREE.Object3D();
   function instance(batch,index,x,y,z,sx,sy,sz,spin) {
     dummy.position.set(x,y,z);
@@ -303,13 +321,44 @@ export function createWorld(host, select, publish, openOffice) {
   });
   for(let i=0;i<tufts.count;i++){
     let x,z;
-    do{x=random()*434-217;z=random()*432-216;}
-    while(Math.abs(x-river(z))<8||points.some(([a,b])=>Math.max(Math.abs(a-x),Math.abs(b-z))<25));
+    do{x=random()*674-337;z=random()*674-337;}
+    while(Math.abs(x-river(z))<8||onField(x,z)||points.some(([a,b])=>Math.max(Math.abs(a-x),Math.abs(b-z))<townEdge+2));
     const scale=.35+random()*.77;
     instance(tufts,i,x,height(x,z)+scale*.21,z,scale*.25,scale,scale*.3,i);
   }
   canopy.castShadow=true;trunks.castShadow=true;canopy.receiveShadow=true;tufts.receiveShadow=true;
   scene.add(canopy,trunks,tufts);
+  for(const field of fields){
+    const land=new THREE.PlaneGeometry(field.w,field.d,9,9);
+    land.rotateX(-Math.PI/2);
+    const v=land.attributes.position;
+    for(let i=0;i<v.count;i++){
+      const x=v.getX(i)+field.x,z=v.getZ(i)+field.z;
+      v.setXYZ(i,x,height(x,z)+.16,z);
+    }
+    land.computeVertexNormals();
+    const plot=new THREE.Mesh(land,material('#74604a'));
+    plot.receiveShadow=true;
+    scene.add(plot);
+    const crops=new THREE.InstancedMesh(cone,material(field.id%2?'#a8a45f':'#87934f'),180);
+    for(let i=0;i<crops.count;i++){
+      const x=field.x+(i%10-4.5)*1.59+(random()-.5)*.26,z=field.z+(Math.floor(i/10)-8.5)*.92;
+      instance(crops,i,x,height(x,z)+.37,z,.21,.55+random()*.3,.22,i*.34);
+    }
+    crops.receiveShadow=true;
+    scene.add(crops);
+    for(const side of [-1,1]){
+      const z=field.z+side*(field.d/2+.25);
+      for(let i=0;i<=6;i++){
+        const x=field.x+(i-3)*field.w/6;
+        box(scene,.15,1.14,.15,'#75614a',x,height(x,z)+.5,z);
+        if(i<6){
+          const cx=x+field.w/12;
+          box(scene,field.w/6,.13,.12,'#957852',cx,height(cx,z)+.72,z);
+        }
+      }
+    }
+  }
 
   const banners=[];
   const townsBySeat = points.map(([x,z],id)=>buildTown({
@@ -330,6 +379,25 @@ export function createWorld(host, select, publish, openOffice) {
   const lantern=new THREE.PointLight('#ffd196',17,10,2);
   lantern.visible=false;
   scene.add(lantern);
+  const fireTexture=surface(ctx=>{
+    const glow=ctx.createRadialGradient(64,64,1,64,64,62);
+    glow.addColorStop(0,'#fff6c3');
+    glow.addColorStop(.13,'#ffd56add');
+    glow.addColorStop(.44,'#ff9b4048');
+    glow.addColorStop(1,'#ff721300');
+    ctx.fillStyle=glow;
+    ctx.fillRect(0,0,128,128);
+  });
+  const fireMat=new THREE.SpriteMaterial({map:fireTexture,transparent:true,depthWrite:false,
+    blending:THREE.AdditiveBlending,opacity:.7});
+  const fires=townsBySeat.flatMap(town=>town.lamps.map(lamp=>{
+    const fire=new THREE.Sprite(fireMat);
+    fire.position.set(lamp.x,lamp.y,lamp.z);
+    scene.add(fire);
+    return fire;
+  }));
+  const torchLight=new THREE.PointLight('#ff9d49',0,15,2);
+  scene.add(torchLight);
   const labels = castleGroups.map((group,id) => {
     const label = document.createElement('button');
     label.className = 'world-label';
@@ -376,6 +444,7 @@ export function createWorld(host, select, publish, openOffice) {
   let actor, seat=null, yaw=0, lastSent=0, dirty=false, nearest=null, active=false;
   let destination=null, lastX=0,lastZ=0, lift=0, velocity=0;
   let zoom=1,currentZoom=1,lastShadow=-Infinity,pitch=0,firstPerson=false;
+  const walkVelocity=new THREE.Vector2();
   const others = new Map();
   const towns = points.map(()=>[]);
   const aiKings = new Map();
@@ -490,6 +559,9 @@ export function createWorld(host, select, publish, openOffice) {
     if(dz!==undefined&&Math.abs(x-river(dz))<11)return Math.max(height(x,z),height(river(dz),dz)+4.72);
     return height(x,z);
   }
+  function interiorAt(x,z){
+    return interiors.find(room=>Math.abs(x-room.x)<room.w/2&&Math.abs(z-room.z)<room.d/2);
+  }
   function frame(now,dt) {
     if (!active) return;
     if (actor) {
@@ -501,12 +573,18 @@ export function createWorld(host, select, publish, openOffice) {
         if (Math.hypot(dx,dz)<.8) {destination=null;dx=0;dz=0;}
       }
       const moving=Math.hypot(dx,dz);
-      if (moving) {
-        const speed=pressed.has('shift')?5:19;
+      const enclosed=!!interiorAt(actor.position.x,actor.position.z);
+      const city=points.some(([x,z])=>Math.max(Math.abs(x-actor.position.x),Math.abs(z-actor.position.z))<townEdge);
+      const gait=pressed.has('shift')?(enclosed?1.55:2.3):enclosed?3.35:city?4.9:6.7;
+      const blend=1-Math.exp(-dt*(moving?10:18));
+      walkVelocity.x+=((moving?dx/moving*gait:0)-walkVelocity.x)*blend;
+      walkVelocity.y+=((moving?dz/moving*gait:0)-walkVelocity.y)*blend;
+      const speed=walkVelocity.length();
+      if (speed>.035) {
         const steps=Math.max(1,Math.ceil(speed*dt/.34));
         for(let step=0;step<steps;step++){
-          const x=clamp(actor.position.x+dx/moving*speed*dt/steps,-limit,limit);
-          const z=clamp(actor.position.z+dz/moving*speed*dt/steps,-limit,limit);
+          const x=clamp(actor.position.x+walkVelocity.x*dt/steps,-limit,limit);
+          const z=clamp(actor.position.z+walkVelocity.y*dt/steps,-limit,limit);
           if(!blocked(x,actor.position.z,lift))actor.position.x=x;
           if(!blocked(actor.position.x,z,lift))actor.position.z=z;
         }
@@ -519,10 +597,10 @@ export function createWorld(host, select, publish, openOffice) {
         velocity=lift>0?velocity-24*dt:0;
         dirty=true;
       }
-      state(actor,!!moving,now);
+      state(actor,speed>.14,now);
       actor.userData.figure.position.y+=lift;
       actor.userData.figure.scale.y=pressed.has('shift')?.62:1;
-      let distance=32;
+      let distance=townEdge+6;
       nearest=null;
       points.forEach(([x,z],id)=>{
         const d=Math.hypot(x-actor.position.x,z-actor.position.z);
@@ -535,7 +613,11 @@ export function createWorld(host, select, publish, openOffice) {
       }
     }
     const focus=actor?.position ?? castleGroups[0].position;
-    const inside=actor&&interiors.find(room=>Math.abs(focus.x-room.x)<room.w/2&&Math.abs(focus.z-room.z)<room.d/2);
+    const inside=actor&&interiorAt(focus.x,focus.z);
+    const seconds=Math.max(0,elapsed());
+    const weather=climateAt(seconds);
+    const label=climate.update({...weather,seconds},dt,focus,inside);
+    if(label)host.dispatchEvent(new CustomEvent('kingdom-weather',{detail:label}));
     const eye=actor&&(firstPerson||inside);
     const office=atOffice();
     if(actor) actor.userData.figure.visible=!eye;
@@ -544,11 +626,23 @@ export function createWorld(host, select, publish, openOffice) {
     placeHint.textContent=office?'왕의 집무실 · E로 집무 시작':inside?.kind==='office'?'왕궁 · 책상 앞으로 이동하세요':inside?.kind==='shop'?'상점':'주택';
     lantern.visible=!!inside;
     if(inside)lantern.position.set(inside.x-.72,inside.level+(inside.kind==='office'?3.4:2.9),inside.z-.8);
+    const firelight=1-weather.day;
+    let nearestFire=null, fireDistance=15;
+    for(let i=0;i<fires.length;i++){
+      const fire=fires[i];
+      const distance=fire.position.distanceTo(focus),flicker=1.25+.16*Math.sin(now*.012+i*4);
+      fire.visible=firelight>.16&&distance<72;
+      if(fire.visible)fire.scale.set(flicker,1.32*flicker,1);
+      if(fire.visible&&distance<fireDistance){nearestFire=fire;fireDistance=distance;}
+    }
+    torchLight.intensity=nearestFire&&!inside?firelight*(35+Math.sin(now*.013)*5):0;
+    if(nearestFire)torchLight.position.copy(nearestFire.position);
     currentZoom+=(zoom-currentZoom)*(1-Math.exp(-dt*9));
     const distance=(actor?15:81)*currentZoom;
     lastX=focus.x;lastZ=focus.z;
     if(eye){
-      const y=focus.y+(pressed.has('shift')?1.52:2.6)+lift;
+      const sway=.035*Math.sin(now*.011)*Math.min(1,walkVelocity.length()/4.9);
+      const y=focus.y+(pressed.has('shift')?1.52:2.6)+lift+sway;
       camera.position.set(lastX,y,lastZ);
       look.set(lastX-Math.sin(yaw)*Math.cos(pitch),y+Math.sin(pitch),lastZ-Math.cos(yaw)*Math.cos(pitch));
     }else{
@@ -580,9 +674,31 @@ export function createWorld(host, select, publish, openOffice) {
       }
       positions.needsUpdate=true;
     }
-    if(now-lastShadow>105){
-      sun.target.position.set(focus.x,focus.y,focus.z);
-      sun.position.set(focus.x-62,focus.y+49,focus.z+25);
+    for(const town of townsBySeat){
+      const near=Math.hypot(focus.x-town.center.x,focus.z-town.center.z)<100;
+      for(let i=0;i<town.guards.length;i++){
+        const guard=town.guards[i];
+        guard.model.visible=near;
+        if(!near)continue;
+        const phase=now*.00082+i*1.81;
+        if(guard.patrolAxis){
+          const path=Math.sin(phase)*3.2;
+          guard.model.position.x=guard.x+(guard.patrolAxis==='x'?path:0);
+          guard.model.position.z=guard.z+(guard.patrolAxis==='z'?path:0);
+          const pace=Math.cos(phase),turn=Math.min(1,Math.abs(pace)*1.6);
+          const dx=Math.sin(guard.heading)*(1-turn)+(guard.patrolAxis==='x'?Math.sign(pace)*turn:0);
+          const dz=Math.cos(guard.heading)*(1-turn)+(guard.patrolAxis==='z'?Math.sign(pace)*turn:0);
+          guard.model.rotation.y=Math.atan2(dx,dz);
+          const step=Math.sin(now*.009+i*1.4)*.38*turn;
+          guard.legs[0].rotation.x=step;
+          guard.legs[1].rotation.x=-step;
+          guard.model.position.y=6.05+.05*Math.abs(step);
+        }else{
+          guard.model.rotation.y=guard.heading+.21*Math.sin(phase);
+        }
+      }
+    }
+    if(now-lastShadow>135){
       renderer.shadowMap.needsUpdate=true;
       lastShadow=now;
     }
@@ -624,12 +740,17 @@ export function createWorld(host, select, publish, openOffice) {
   return {
     activate(value) {
       active=value;pressed.clear();destination=null;drag=null;
+      walkVelocity.set(0,0);
       if(!value&&document.pointerLockElement===view)document.exitPointerLock();
     },
     atHome() {return seat!==null && nearest===seat;},
     atOffice,
     lockPointer,
     toggleView(){firstPerson=!firstPerson;return firstPerson;},
+    showChart(canvas) {
+      drawChart??=createChart({limit,points,castles,height,river,roads});
+      drawChart(canvas,actor,Array.from(others.values(),entry=>entry.target));
+    },
     settlements(players) {
       for (const p of players) {
         const list=towns[p.id], count=clamp(p.citizens,0,8);
@@ -668,6 +789,7 @@ export function createWorld(host, select, publish, openOffice) {
       actor.rotation.y=saved?.yaw??Math.PI;
       yaw=saved?.yaw===undefined?0:saved.yaw-Math.PI;
       pitch=0;lift=0;velocity=0;dirty=true;
+      walkVelocity.set(0,0);
     },
     population(positions,players,self) {
       const seen=new Set();
