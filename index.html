@@ -40,7 +40,7 @@
 <div id="play" hidden>
 <div class="realm-bar">
 <div class="room-identity"><span class="realm-mark" aria-hidden="true">♛</span><div><strong>철의 왕관</strong><small id="activeRoom"></small></div><small id="occupancy"></small></div>
-<div class="realm-actions"><button id="copyInvite">초대 링크</button><button id="statsButton">통계 <kbd>P</kbd></button><button id="panelButton" aria-controls="management" aria-expanded="true">왕국 관리</button><button id="fullscreen" aria-pressed="false">전체화면 <kbd>F</kbd></button><button id="leaveRoom">나가기</button></div>
+<div class="realm-actions"><button id="copyInvite">초대 링크</button><button id="statsButton">통계 <kbd>P</kbd></button><button id="panelButton" aria-controls="management" aria-expanded="true">왕국 관리</button><button id="viewButton" aria-pressed="false">1인칭 <kbd>V</kbd></button><button id="lookButton" aria-pressed="false">마우스 시점</button><button id="fullscreen" aria-pressed="false">전체화면 <kbd>F</kbd></button><button id="leaveRoom">나가기</button></div>
 </div>
 <section class="stats" aria-label="내 영지 자원">
 <div><small>금화</small><strong id="gold">—</strong></div><div><small>식량</small><strong id="food">—</strong></div><div><small>주둔 병력</small><strong id="army">—</strong></div><div><small>명성</small><strong id="fame">—</strong></div><div><small>백성</small><strong id="citizens">—</strong></div>
@@ -50,7 +50,7 @@
 <div>
 <section class="world-view" aria-label="3D 왕국">
 <div class="map" id="map"></div>
-<div class="caption"><p class="shortcuts"><kbd>WASD</kbd> 이동 <kbd>Shift</kbd> 웅크리기 <kbd>Space</kbd> 점프 <kbd>E</kbd> 가까운 성 <span class="mouse-hint">· 드래그 시점 전환 · 휠 확대/축소</span></p></div></section>
+<div class="caption"><p class="shortcuts"><kbd>WASD</kbd> 이동 <kbd>Shift</kbd> 웅크리기 <kbd>Space</kbd> 점프 <kbd>E</kbd> 상호작용 <kbd>V</kbd> 시점 <span class="mouse-hint">· 마우스 시선 · Esc 커서 해제</span></p></div></section>
 <details class="box record"><summary>왕국 연대기</summary><ol id="logs"><li class="sub">아직 기록이 없습니다.</li></ol></details>
 </div>
 <aside id="management">
@@ -67,8 +67,6 @@
 <section class="box"><div class="heading"><h2 id="target">성 정보</h2><small id="region"></small></div>
 <div class="content" id="details"><label>왕국 선택 <select id="targetSelect"></select></label><p id="owner"></p><p id="defense" class="sub"></p><p id="relation" class="label"></p>
 <div class="actions" id="diplomacy" hidden>
-<button data-action="alliance">수교 제안 <span>백성 간 교역 개시</span></button>
-<button data-action="break" hidden>수교 종료</button>
 <button data-action="trade">교역 제안 <span>내 식량 30 ↔ 상대 금화 24</span></button>
 <button data-action="truce">휴전 제안 <span>2분간 상호 공격 금지</span></button>
 <form id="attack" class="row"><label>출정 병력 <input class="units" id="units" type="number" min="10" value="30" required></label><button class="danger">출정</button></form>
@@ -84,6 +82,24 @@
 <p id="economicClock" class="sub"></p>
 <div class="scroll"><table><thead><tr><th scope="col">항목</th><th scope="col">내 왕국</th></tr></thead><tbody id="statRows"></tbody></table></div>
 <p class="sub">국민소득은 세후 판매 수익입니다. 판매 수익의 10%가 국고에 들어갑니다.</p>
+</dialog>
+<dialog class="modal office" id="officeDialog">
+<div class="row"><div><small id="officeRealm"></small><h2>왕의 집무실</h2></div><form method="dialog"><button>닫기</button></form></div>
+<div class="office-columns">
+<section><h3>국가 현황</h3><div class="scroll"><table><thead><tr><th scope="col">항목</th><th scope="col">내 왕국</th></tr></thead><tbody id="officeRows"></tbody></table></div></section>
+<section class="office-orders">
+<h3>외교와 군비</h3>
+<label>상대 왕국<select id="officeTarget"></select></label>
+<p id="officeRelation" class="label"></p>
+<button data-office-action="alliance">수교 제안</button>
+<button data-office-action="break">수교 종료</button>
+<button data-office-action="truce">휴전 제안</button>
+<button data-office-action="declare" class="danger">선전포고</button>
+<button data-office-action="weapon" id="weaponButton">무기 강화</button>
+<div id="officeOffers"></div>
+</section>
+</div>
+<p id="officeFeedback" role="status"></p>
 </dialog>
 <script type="module" src="./game.mjs"></script>
 </body>

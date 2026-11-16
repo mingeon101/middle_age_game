@@ -34,11 +34,18 @@ body.in-realm{overflow:hidden;background:#202a20}
 #play .end{top:calc(var(--spacing) + 125px);left:var(--spacing);max-width:calc(100vw - 2 * var(--spacing));width:max-content}
 .in-realm #feedback:not(:empty){position:fixed;z-index:3;bottom:calc(var(--spacing,20px) + 48px);left:50%;max-width:min(550px,90vw);width:max-content;transform:translateX(-50%);padding:6px 12px;margin:0;background:#241f17eb;border:1px solid #d1af6a81;border-radius:6px;pointer-events:none;text-align:center}
 .in-realm #feedback:empty{display:none}
-@media(max-width:900px){
+.place-hint{position:absolute;z-index:1;left:50%;bottom:110px;transform:translateX(-50%);max-width:90vw;background:#1e211ae8;color:#efcf8e;border:1px solid #bfa36c;border-radius:6px;padding:6px 12px;pointer-events:none;text-align:center}
+.reticle{position:absolute;left:50%;top:50%;width:5px;height:5px;background:#fff9e6;border-radius:50%;box-shadow:0 0 4px #070704;transform:translate(-50%,-50%);pointer-events:none}
+.modal.office{max-width:min(870px,94vw);border-color:#b49b63;max-height:90dvh;overflow:auto}
+.office-columns{display:grid;grid-template-columns:1.2fr 1fr;gap:22px;margin-top:14px}
+.office-orders{display:grid;align-content:start;gap:8px}
+.office-orders label{display:grid;gap:4px}
+#officeFeedback{color:#efcf8e;margin-top:12px;min-height:1.35em}
+@media(max-width:1080px){
   #play .realm-bar{display:grid;justify-items:start;justify-content:stretch;gap:5px}
   .room-identity{padding:4px 7px}
   .room-identity #occupancy{display:none}
-  .realm-actions{flex-wrap:nowrap;padding:4px;max-width:100%;gap:4px;overflow:auto}
+  .realm-actions{flex-wrap:nowrap;padding:4px;max-width:calc(100vw - 2 * var(--spacing));gap:4px;overflow:auto}
   .realm-actions button{font-size:12px;padding:4px 6px}
   .realm-actions kbd,.mouse-hint{display:none}
   #play .stats{top:calc(var(--spacing) + 89px);width:min(350px,calc(100vw - 2 * var(--spacing)))}
@@ -47,7 +54,11 @@ body.in-realm{overflow:hidden;background:#202a20}
   #play .record{width:min(200px,calc(100vw - 2 * var(--spacing)))}
   #play .caption{font-size:11px}
 }
-@media(max-height:520px) and (min-width:901px){
+@media(max-width:580px){
+  .office-columns{grid-template-columns:1fr}
+  .office-orders{grid-row:1}
+}
+@media(max-height:520px) and (min-width:1081px){
   #play aside{bottom:var(--spacing)}
   #play .stats{width:min(335px,calc(100vw - var(--panel-width) - 3 * var(--spacing)))}
 }

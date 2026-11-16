@@ -6,8 +6,8 @@ import {
 import {
   getDatabase, ref, get, set, remove, onValue, runTransaction, onDisconnect
 } from 'https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js';
-import { castles, room, normalize, join, due, advance, command } from './realm.mjs';
-import { createWorld } from './world.mjs';
+import { castles, room, normalize, join, due, advance, command, defenseOf, weaponCost, atWar } from './realm.mjs';
+import { createWorld, worldScale } from './world.mjs';
 
 const app = initializeApp({
   apiKey: 'AIzaSyDqc1vQ_nLlsWZJoh6KUB8fgMBbHqZqJz4',
@@ -25,6 +25,7 @@ let feedbackTimer;
 function feedback(message) {
   clearTimeout(feedbackTimer);
   text('feedback',message);
+  if($('officeDialog').open)text('officeFeedback',message);
   if (message && current) feedbackTimer=setTimeout(()=>text('feedback',''),5000);
 }
 const number = new Intl.NumberFormat('ko-KR');
@@ -111,6 +112,7 @@ function closeRoom() {
   document.body.classList.remove('in-realm');
   if(ctx&&document.fullscreenElement) document.exitFullscreen().catch(()=>{});
   $('statsDialog').close();
+  $('officeDialog').close();
   $('play').hidden=true;
   $('roomGate').hidden=!auth.currentUser;
   return cleanup;
@@ -127,7 +129,10 @@ function worldSnapshot() {
   const avatars={};
   for (const [uid,sessions] of Object.entries(positions)) {
     const sessionsByTime = Object.values(sessions).sort((a,b)=>b.at-a.at);
-    if (sessionsByTime.length) avatars[uid]=sessionsByTime[0];
+    if (sessionsByTime.length) {
+      const p=sessionsByTime[0];
+      avatars[uid]={...p,x:p.x*worldScale,z:p.z*worldScale};
+    }
   }
   world.player(me?.id??null,avatars[current.uid]);
   world.population(avatars,game.members,current.uid);
@@ -136,7 +141,7 @@ function worldSnapshot() {
 function startWorld() {
   if (!world&&!worldFailed) {
     try {
-      world=createWorld($('map'),select,sendPosition);
+      world=createWorld($('map'),select,sendPosition,openOffice);
     } catch (error) {
       worldFailed=true;
       const box=document.createElement('p');
@@ -164,7 +169,7 @@ async function registerPosition(ctx) {
 function sendPosition(x,z,yaw,lift,crouch) {
   const ctx=current;
   if (!ctx||!me) return;
-  ctx.coords={x,z,yaw,lift,crouch,at:serverNow()};
+  ctx.coords={x:x/worldScale,z:z/worldScale,yaw,lift,crouch,at:serverNow()};
   if (ctx.present&&connected) set(ctx.ownPosition,ctx.coords).catch(()=>{});
 }
 
@@ -293,6 +298,13 @@ function act(payload) {
     feedback('내 성 가까이에서 군사 훈련을 명령할 수 있습니다.');
     return;
   }
+  const proposal=game?.offers.find(offer=>offer.id===payload.offer);
+  const officeOnly=['alliance','break','declare','weapon'].includes(payload.type)||
+    (payload.type==='accept'&&proposal?.type==='alliance');
+  if(officeOnly&&(!world?.atOffice()||!$('officeDialog').open)){
+    feedback('왕궁에 들어가 책상 앞에서 E를 눌러 집무실을 여세요.');
+    return;
+  }
   const offerId=crypto.randomUUID();
   transaction((data,uid,now)=>{
     advance(data,now);
@@ -314,6 +326,21 @@ function showPanel(visible) {
   $('panelButton').setAttribute('aria-expanded',String(visible));
 }
 
+$('viewButton').onclick=changeView;
+function changeView() {
+  if(!me||!world)return;
+  const first=world.toggleView();
+  $('viewButton').setAttribute('aria-pressed',String(first));
+  $('viewButton').firstChild.data=first?'3인칭 ':'1인칭 ';
+  document.querySelector('#map canvas')?.focus({preventScroll:true});
+}
+$('lookButton').onclick=()=>{
+  if(document.pointerLockElement)document.exitPointerLock();
+  else if(me)world?.lockPointer();
+};
+document.addEventListener('pointerlockchange',()=>{
+  $('lookButton').setAttribute('aria-pressed',String(!!document.pointerLockElement));
+});
 $('fullscreen').onclick=toggleFullscreen;
 async function toggleFullscreen() {
   if (!current) return;
@@ -338,7 +365,7 @@ $('attack').onsubmit=event=>{event.preventDefault();act({type:'attack',to:select
 document.querySelectorAll('[data-action]').forEach(button=>button.onclick=()=>act({type:button.dataset.action,to:selected}));
 $('statsButton').onclick=toggleStats;
 function toggleStats() {
-  if(!game)return;
+  if(!game||$('officeDialog').open)return;
   if($('statsDialog').open){$('statsDialog').close();return;}
   updateStats();
   world?.activate(false);
@@ -348,12 +375,76 @@ window.addEventListener('keydown',event=>{
   if(!current||event.repeat||event.ctrlKey||event.metaKey||event.altKey||/INPUT|TEXTAREA|SELECT/.test(event.target.tagName))return;
   if(event.code==='KeyP'){event.preventDefault();toggleStats();}
   if(event.code==='KeyF'){event.preventDefault();toggleFullscreen();}
+  if(event.code==='KeyV'&&!$('officeDialog').open&&!$('statsDialog').open){event.preventDefault();changeView();}
 });
-$('statsDialog').addEventListener('close',()=>world?.activate(!!current));
-$('statsDialog').addEventListener('cancel',()=>world?.activate(!!current));
+for(const id of ['statsDialog','officeDialog']){
+  $(id).addEventListener('close',()=>world?.activate(!!current));
+}
+
+function openOffice(){
+  if (!me||!world?.atOffice()||$('officeDialog').open||$('statsDialog').open)return;
+  const list=castles.flatMap((_,id)=>id===me.id?[]:[new Option(castle(id),String(id))]);
+  $('officeTarget').replaceChildren(...list);
+  if(selected!==me.id)$('officeTarget').value=String(selected);
+  text('officeRealm',castle(me.id));
+  text('officeFeedback','');
+  world.activate(false);
+  $('officeDialog').showModal();
+  renderOffice();
+}
+$('officeTarget').onchange=renderOffice;
+document.querySelectorAll('[data-office-action]').forEach(button=>{
+  button.onclick=()=>act({type:button.dataset.officeAction,to:Number($('officeTarget').value)});
+});
+
+function relations(id){
+  const ally=game.allies.some(a=>a.a===me.id&&a.b===id||a.b===me.id&&a.a===id);
+  const pact=game.truces.find(a=>a.key===[me.id,id].sort().join(':'));
+  const war=atWar(game,me.id,id);
+  return {ally,pact,war};
+}
+function relationship({ally,pact,war}){
+  if(ally)return '수교 중 · 백성 간 교역 활성화';
+  if(pact)return '휴전 중 · '+sec(pact.end)+'초';
+  return war?'전쟁 중':'중립';
+}
+function renderOffice(){
+  if(!me||!$('officeDialog').open)return;
+  const id=Number($('officeTarget').value);
+  const relation=relations(id), finished=game.winner!==null;
+  text('officeRelation',relationship(relation));
+  for(const button of $('officeDialog').querySelectorAll('[data-office-action]')){
+    const type=button.dataset.officeAction;
+    button.hidden=(type==='break'&&!relation.ally)||(type==='alliance'&&relation.ally);
+    button.disabled=finished||
+      (type==='alliance'&&relation.war)||
+      (type==='declare'&&(relation.ally||relation.pact||relation.war))||
+      (type==='truce'&&!!relation.pact)||
+      (type==='weapon'&&(me.weapon>=5||me.gold<weaponCost(me.weapon)));
+  }
+  text('weaponButton',me.weapon>=5?'무기 강화 · 최고 단계':'무기 강화 · 금화 '+weaponCost(me.weapon));
+  renderStatRows('officeRows');
+  const offers=game.offers.filter(o=>o.to===me.id&&o.type==='alliance');
+  list('officeOffers',offers,()=>offers.map(o=>{
+    const row=document.createElement('div'), label=document.createElement('span');
+    row.className='offer row';
+    label.textContent=castle(o.from)+' 수교 요청';
+    row.append(label);
+    for(const [type,label] of [['accept','수락'],['decline','거절']]){
+      const button=document.createElement('button');
+      button.textContent=label;
+      button.onclick=()=>act({type,offer:o.id});
+      row.append(button);
+    }
+    return row;
+  }));
+}
 function updateStats() {
   if(!game)return;
   text('economicClock',game.winner===null?'다음 인구 증가 및 판매 · '+sec(game.citizensAt)+'초':'경기가 종료되었습니다.');
+  renderStatRows('statRows');
+}
+function renderStatRows(id) {
   const rows=[
     ['왕국',castle(me?.id)],
     ['백성',me?.citizens],
@@ -362,11 +453,14 @@ function updateStats() {
     ['세금소득 (누계)',me?.taxIncome],
     ['판매한 상품',me?.goodsSold],
     ['수교국',me?game.allies.filter(a=>a.a===me.id||a.b===me.id).map(a=>castle(a.a===me.id?a.b:a.a)).join(', ')||'없음':undefined],
+    ['교전국',me?castles.flatMap((_,id)=>atWar(game,me.id,id)?[castle(id)]:[]).join(', ')||'없음':undefined],
+    ['무기',me?me.weapon+'단계 · 전투력 +'+(me.weapon-1)*15+'%':undefined],
+    ['농지 / 성벽',me?me.farm+'단계 / '+me.wall+'단계':undefined],
     ['금화',me?.gold], ['식량',me?.food], ['주둔 병력',me?.army],
     ['훈련 완료 인원',me?.trained], ['훈련 남은 시간',me?.trainingAt?sec(me.trainingAt)+'초':'—']
   ];
   if(!me)rows[0][1]='선택 대기';
-  list('statRows',rows,()=>rows.map(([label,value])=>{
+  list(id,rows,()=>rows.map(([label,value])=>{
     const row=document.createElement('tr'), header=document.createElement('th'), data=document.createElement('td');
     header.scope='row'; header.textContent=label;
     data.textContent=typeof value==='number'?number.format(value):value??'—';
@@ -406,18 +500,15 @@ function render() {
   text('target',castle(selected));
   text('region',castles[selected][1]);
   text('owner',p.ai?'AI 왕':p.lord+' 왕');
-  text('defense','주둔 병력 '+p.army+' · 성벽 '+p.wall+'단계');
-  const alliance=me&&game.allies.some(a=>a.a===me.id&&a.b===selected||a.b===me.id&&a.a===selected);
-  const pact=me&&game.truces.find(t=>t.key===[me.id,p.id].sort().join(':'));
-  text('relation',alliance?'수교 중 · 백성 간 교역 활성화':pact?'휴전 중 · '+sec(pact.end)+'초':'');
+  text('defense','주둔 병력 '+p.army+' · 방어력 '+defenseOf(p)+' · 무기 '+p.weapon+'단계');
+  const relation=me&&me.id!==p.id?relations(p.id):null;
+  text('relation',relation?relationship(relation):'');
   $('diplomacy').hidden=!me||me.id===p.id||finished;
-  $('diplomacy').querySelector('[data-action="alliance"]').hidden=!!alliance;
-  $('diplomacy').querySelector('[data-action="break"]').hidden=!alliance;
   $('units').max=me?.army??0;
   const marching=me&&game.marches.find(m=>m.from===me.id);
   const incoming=me&&game.marches.find(m=>m.to===me.id);
-  $('attack').querySelector('button').disabled=!!(alliance||pact||marching||!me||me.army<10||me.food<25);
-  text('marchHint',incoming?'적군 접근 중 · '+sec(incoming.end)+'초':marching?'출정 중 · '+sec(marching.end)+'초':'식량 25 · 12초 뒤 도착');
+  $('attack').querySelector('button').disabled=!!(!relation?.war||marching||!me||me.army<10||me.food<25);
+  text('marchHint',incoming?'적군 접근 중 · '+sec(incoming.end)+'초':marching?'출정 중 · '+sec(marching.end)+'초':relation?.war?'식량 25 · 12초 뒤 도착':'왕궁 집무실에서 선전포고하면 출정할 수 있습니다.');
   const offers=me?game.offers.filter(o=>o.to===me.id||o.from===me.id):[];
   $('mail').hidden=!offers.length||finished;
   list('offers',offers,()=>offers.map(offer=>{
@@ -427,6 +518,12 @@ function render() {
     label.textContent=castle(received?offer.from:offer.to)+' · '+kind[offer.type]+(received?' 제안':' 응답 대기 중');
     box.append(label);
     if(received){
+      if(offer.type==='alliance'){
+        const note=document.createElement('small');
+        note.textContent='왕궁 집무실에서 수락하거나 거절할 수 있습니다.';
+        box.append(note);
+        return box;
+      }
       const bar=document.createElement('div');bar.className='row';
       for(const [type,label] of [['accept','수락'],['decline','거절']]){
         const btn=document.createElement('button');btn.textContent=label;btn.onclick=()=>act({type,offer:offer.id});bar.append(btn);
@@ -439,6 +536,7 @@ function render() {
     const li=document.createElement('li');li.textContent=log;return li;
   }));
   if($('statsDialog').open)updateStats();
+  renderOffice();
 }
 setInterval(()=>{
   if(!game)return;

@@ -1,18 +1,31 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
 import { castles } from './realm.mjs';
+import { buildTown } from './town.mjs';
 
-const limit = 92;
-const points = castles.map(([, , x,z]) => [(x-50)*2,(z-50)*2]);
-const river = z => 15+12*Math.sin(z/26);
+export const worldScale=2.4;
+const limit = 92*worldScale;
+const points = castles.map(([, , x,z]) => [(x-50)*2*worldScale,(z-50)*2*worldScale]);
+const river = z => -45+15*Math.sin(z/64);
+const crossings=[-145,-31,111,164];
+function terrain(x,z) {
+  const undulations=5.5*Math.sin(x/43)*Math.cos(z/61)+2.6*Math.sin((x-z)/34);
+  const mountains=31*Math.exp(-((x+65)**2/12500+(z+181)**2/2300))+
+    23*Math.exp(-((x-138)**2/9600+(z-173)**2/2700));
+  return undulations+mountains;
+}
 function height(x,z) {
-  const mountains = 17*Math.exp(-((x+27)**2/2700+(z+77)**2/360));
-  const ground = 2.5*Math.sin(x/19)*Math.cos(z/28)+mountains;
-  const channel = 4.8*Math.exp(-((x-river(z))**2)/43);
-  return ground-channel;
+  let y=terrain(x,z)-5.3*Math.exp(-((x-river(z))**2)/68);
+  for(const [cx,cz] of points){
+    const distance=Math.max(Math.abs(x-cx),Math.abs(z-cz));
+    if(distance>=42)continue;
+    const t=clamp((distance-29)/13,0,1);
+    y=THREE.MathUtils.lerp(terrain(cx,cz),y,t*t*(3-2*t));
+  }
+  return y;
 }
 const clamp = (n,min,max) => Math.min(max,Math.max(min,n));
 
-export function createWorld(host, select, publish) {
+export function createWorld(host, select, publish, openOffice) {
   const scene = new THREE.Scene();
   scene.fog = new THREE.FogExp2('#a4b7bb',.0041);
   scene.add(new THREE.HemisphereLight('#d8ebff','#524c3b',1.55));
@@ -24,7 +37,7 @@ export function createWorld(host, select, publish) {
   sun.shadow.normalBias=.055;
   sun.shadow.bias=-.0002;
   scene.add(sun,sun.target);
-  const camera = new THREE.PerspectiveCamera(53,1,.2,525);
+  const camera = new THREE.PerspectiveCamera(57,1,.12,900);
   const renderer = new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
   renderer.toneMapping=THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure=1.13;
@@ -35,7 +48,7 @@ export function createWorld(host, select, publish) {
   renderer.domElement.setAttribute('aria-label','3D 왕국. WASD 또는 방향키로 왕을 움직입니다.');
   renderer.domElement.tabIndex = 0;
   host.prepend(renderer.domElement);
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(390,28,18),new THREE.ShaderMaterial({
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(800,28,18),new THREE.ShaderMaterial({
     side:THREE.BackSide,
     depthWrite:false,
     uniforms:{
@@ -66,7 +79,7 @@ export function createWorld(host, select, publish) {
   sky.renderOrder=-100;
   sky.frustumCulled=false;
   scene.add(sky);
-  const geometry = new THREE.PlaneGeometry(220,220,104,104);
+  const geometry = new THREE.PlaneGeometry(505,505,176,176);
   geometry.rotateX(-Math.PI/2);
   const verts = geometry.attributes.position;
   const colors = [], fieldUV = geometry.attributes.uv;
@@ -119,7 +132,7 @@ export function createWorld(host, select, publish) {
       ctx.fillRect(px+1,py+1,30,14);
       ctx.fillStyle='#fff5';ctx.fillRect(px+2,py+2,27,1);
     }
-  });
+  },true);
   const stoneColors=new Set(['#909188','#b4ad93','#787b74','#9b988f']);
   function material(hex) {
     if (!mats.has(hex)) mats.set(hex,new THREE.MeshStandardMaterial({
@@ -135,7 +148,14 @@ export function createWorld(host, select, publish) {
   }
   function box(parent,w,h,d,hex,x,y,z) {
     const key = [w,h,d].join(',');
-    if (!boxes.has(key)) boxes.set(key,new THREE.BoxGeometry(w,h,d));
+    if (!boxes.has(key)) {
+      const geo=new THREE.BoxGeometry(w,h,d),uv=geo.attributes.uv;
+      const size=[[d,h],[d,h],[w,d],[w,d],[w,h],[w,h]];
+      size.forEach(([width,height],face)=>{
+        for(let i=face*4;i<face*4+4;i++)uv.setXY(i,uv.getX(i)*width/3.4,uv.getY(i)*height/3.5);
+      });
+      boxes.set(key,geo);
+    }
     return mesh(parent,boxes.get(key),hex,x,y,z);
   }
   const shadowGeo = new THREE.CircleGeometry(1,14);
@@ -150,7 +170,7 @@ export function createWorld(host, select, publish) {
   }
 
   const riverVerts=[];
-  for (let z=-108;z<108;z+=2) {
+  for (let z=-248;z<248;z+=2) {
     const x=river(z), next=river(z+2);
     const y=height(x,z)+2.1, nextY=height(next,z+2)+2.1;
     riverVerts.push(x-4,y,z,next-4,nextY,z+2,x+4,y,z,
@@ -199,12 +219,29 @@ export function createWorld(host, select, publish) {
     road.receiveShadow=true;
     scene.add(road);
   }
-  const paths = [[0,1],[1,2],[2,3],[3,0],[1,3]];
-  for (const [a,b] of paths) route(points[a],points[b]);
-  for (const z of [-28,17,52]) {
-    const x=river(z), y=height(x,z)+3.3;
-    box(scene,10,.65,3,'#926e4c',x,y,z);
-    for (const dz of [-1.45,1.45]) box(scene,10,.3,.24,'#624f39',x,y+.7,z+dz);
+  function gate(i){return [points[i][0],points[i][1]+26];}
+  const paths=[[0,1,-145],[1,2,-31],[2,3,164],[3,0,111]];
+  for (const [a,b,z] of paths){
+    const x=river(z), start=gate(a),end=gate(b);
+    const startSide=Math.sign(start[0]-river(start[1])),endSide=Math.sign(end[0]-river(end[1]));
+    const aRoad=[start[0],start[1]+10],bRoad=[end[0],end[1]+10];
+    route(start,aRoad);route(bRoad,end);
+    if(startSide===endSide){
+      const bendX=Math.max(start[0],end[0])+32;
+      route(aRoad,[bendX,aRoad[1]]);
+      route([bendX,aRoad[1]],[bendX,bRoad[1]]);
+      route([bendX,bRoad[1]],bRoad);
+    }else{
+      route(aRoad,[x+startSide*11,z]);route([x+endSide*11,z],bRoad);
+    }
+  }
+  for (const z of crossings) {
+    const x=river(z), y=height(x,z)+4.4;
+    box(scene,22,.65,4,'#926e4c',x,y,z);
+    for (const dz of [-1.91,1.91]) box(scene,22,.27,.23,'#624f39',x,y+.7,z+dz);
+    for(const dx of [-9,-6,-3,0,3,6,9]) for(const side of [-1,1]){
+      box(scene,.23,1.1,.25,'#6d5237',x+dx,y+.5,z+side*1.89);
+    }
   }
 
   let randomState=92471;
@@ -213,12 +250,12 @@ export function createWorld(host, select, publish) {
     return randomState/4294967296;
   }
   for (let ridge=0;ridge<3;ridge++) {
-    const radius=143+ridge*35;
+    const radius=276+ridge*63;
     const vertices=[];
     let previous;
     for(let i=0;i<=56;i++){
       const angle=i/56*Math.PI*2;
-      const peak=[Math.cos(angle)*radius,14+ridge*5+random()*(19+ridge*8),Math.sin(angle)*radius];
+      const peak=[Math.cos(angle)*radius,30+ridge*11+random()*(32+ridge*16),Math.sin(angle)*radius];
       if(previous){
         const c=[previous[0]*.91,-13,previous[2]*.91], d=[peak[0]*.91,-13,peak[2]*.91];
         vertices.push(...previous,...c,...peak,...peak,...c,...d);
@@ -234,11 +271,11 @@ export function createWorld(host, select, publish) {
   }
   const cone=new THREE.ConeGeometry(1,1,6), rock=new THREE.DodecahedronGeometry(1,0);
   const trees=[];
-  for (let i=0;i<210;i++) {
-    const x=random()*188-94,z=random()*184-92,y=height(x,z);
-    if (Math.abs(river(z)-x)<8||points.some(([a,b])=>Math.hypot(a-x,b-z)<13)) continue;
-    if (z>0&&x>-32&&x<24&&random()<.8) continue;
-    if (y>9) {
+  for (let i=0;i<820;i++) {
+    const x=random()*452-226,z=random()*452-226,y=height(x,z);
+    if (Math.abs(river(z)-x)<10||points.some(([a,b])=>Math.max(Math.abs(a-x),Math.abs(b-z))<29)) continue;
+    if (z>0&&x>-73&&x<48&&random()<.7) continue;
+    if (y>18) {
       const stone=mesh(scene,rock,'#838475',x,y+.7,z);
       stone.scale.set(1+random()*2,1+random()*2,1+random()*2);
     } else {
@@ -248,7 +285,7 @@ export function createWorld(host, select, publish) {
   }
   const canopy=new THREE.InstancedMesh(cone,material('#5b7449'),trees.length*2);
   const trunks=new THREE.InstancedMesh(new THREE.CylinderGeometry(.18,.29,1,6),material('#665039'),trees.length);
-  const tufts=new THREE.InstancedMesh(cone,material('#929654'),600);
+  const tufts=new THREE.InstancedMesh(cone,material('#929654'),1050);
   const dummy=new THREE.Object3D();
   function instance(batch,index,x,y,z,sx,sy,sz,spin) {
     dummy.position.set(x,y,z);
@@ -264,10 +301,10 @@ export function createWorld(host, select, publish) {
       canopy.setColorAt(i*2+j,color.setHSL(.19+random()*.07,.19+random()*.17,.66+random()*.28));
     }
   });
-  for(let i=0;i<600;i++){
+  for(let i=0;i<tufts.count;i++){
     let x,z;
-    do{x=random()*174-87;z=random()*170-85;}
-    while(Math.abs(x-river(z))<6.5||points.some(([a,b])=>Math.hypot(a-x,b-z)<8));
+    do{x=random()*434-217;z=random()*432-216;}
+    while(Math.abs(x-river(z))<8||points.some(([a,b])=>Math.max(Math.abs(a-x),Math.abs(b-z))<25));
     const scale=.35+random()*.77;
     instance(tufts,i,x,height(x,z)+scale*.21,z,scale*.25,scale,scale*.3,i);
   }
@@ -275,59 +312,24 @@ export function createWorld(host, select, publish) {
   scene.add(canopy,trunks,tufts);
 
   const banners=[];
-  const castleGroups = points.map(([x,z],id) => {
-    const g = new THREE.Group();
-    const flag=castles[id][4];
-    g.position.set(x,height(x,z)-.15,z);
-    g.userData.castle=id;
-    shadow(g,1,0,1,8,7);
-    box(g,12,1,12,'#66675c',0,.15,0);
-    const stone = id%2?'#909188':'#b4ad93';
-    const roof = '#533d38';
-    box(g,11,3.8,.65,stone,0,1.8,-5);
-    for (const dx of [-5,5]) box(g,.65,3.8,10,stone,dx,1.8,0);
-    for (const dx of [-3.65,3.65]) box(g,2.7,3.8,.65,stone,dx,1.8,5);
-    box(g,4.7,8,4.3,stone,0,3.9,-1.6);
-    const cap = mesh(g,new THREE.ConeGeometry(3.65,2.7,4),roof,0,9.2,-1.6);
-    cap.rotation.y=Math.PI/4;
-    box(g,.1,2,.1,'#47382a',0,11,-1.6);
-    const cloth=new THREE.PlaneGeometry(2.35,.92,10,3);
-    const banner=mesh(g,cloth,flag,1.18,11.5,-1.6);
-    banner.material=material(flag).clone();
-    banner.material.side=THREE.DoubleSide;
-    banners.push(cloth);
-    box(g,2.45,3.3,.28,'#443c30',0,1.65,4.94);
-    for(const dx of [-.88,-.44,0,.44,.88])box(g,.11,3.1,.18,'#a48659',dx,1.62,5.13);
-    for(const dy of [1.0,2.25])box(g,2.24,.13,.19,'#554739',0,dy,5.2);
-    for(const dx of [-1.78,1.78]){
-      box(g,.65,3.1,.83,'#787b74',dx,1.48,5.12);
-      box(g,.79,.22,.9,'#9b988f',dx,2.89,5.12);
-    }
-    box(g,4.2,.42,.92,'#9b988f',0,3.32,5.16);
-    box(g,.68,.94,.14,flag,0,4.51,5.39);
-    box(g,.11,.42,.08,'#e6d29e',0,4.56,5.48);
-    box(g,.33,.10,.08,'#e6d29e',0,4.61,5.48);
-    for (const dx of [-5,5]) for (const dz of [-5,5]) {
-      box(g,2.35,5.8,2.35,stone,dx,2.8,dz);
-      box(g,2.65,.45,2.65,'#797669',dx,5.8,dz);
-      for (const cx of [-.93,.93]) for (const cz of [-.93,.93]) {
-        box(g,.55,.65,.55,stone,dx+cx,6.26,dz+cz);
-      }
-      box(g,.27,.77,.11,'#47433a',dx,4.15,dz+1.18);
-    }
-    for (const dx of [-1.4,1.4]) box(g,.33,1,.11,'#514d42',dx,5.9,.59);
-    g.traverse(node=>{
-      if(node.isMesh&&node.geometry!==shadowGeo){node.castShadow=true;node.receiveShadow=true;}
-    });
-    scene.add(g);
-    for (const dx of [-7.5,7.5]) {
-      const sx=x+dx, sz=z+7, base=height(sx,sz);
-      box(scene,2.65,.18,1.55,'#906d48',sx,base+1,sz);
-      box(scene,3.1,.22,1.95,dx<0?flag:'#d8c19b',sx,base+2.45,sz);
-      for (const leg of [-1.2,1.2]) box(scene,.13,2.4,.14,'#695238',sx+leg,base+1.2,sz);
-    }
-    return g;
-  });
+  const townsBySeat = points.map(([x,z],id)=>buildTown({
+    x,z,id,flag:castles[id][4],height,box,mesh,banners,scene
+  }));
+  const castleGroups = townsBySeat.map(town=>town.group);
+  const obstacles = townsBySeat.flatMap(town=>town.obstacles);
+  const interiors = townsBySeat.flatMap(town=>town.interiors);
+  const placeHint=document.createElement('p');
+  placeHint.className='place-hint';
+  placeHint.hidden=true;
+  host.append(placeHint);
+  const reticle=document.createElement('span');
+  reticle.className='reticle';
+  reticle.setAttribute('aria-hidden','true');
+  reticle.hidden=true;
+  host.append(reticle);
+  const lantern=new THREE.PointLight('#ffd196',25,11,2);
+  lantern.visible=false;
+  scene.add(lantern);
   const labels = castleGroups.map((group,id) => {
     const label = document.createElement('button');
     label.className = 'world-label';
@@ -373,7 +375,7 @@ export function createWorld(host, select, publish) {
 
   let actor, seat=null, yaw=0, lastSent=0, dirty=false, nearest=null, active=false;
   let destination=null, lastX=0,lastZ=0, lift=0, velocity=0;
-  let zoom=1,currentZoom=1,lastShadow=-Infinity;
+  let zoom=1,currentZoom=1,lastShadow=-Infinity,pitch=0,firstPerson=false;
   const others = new Map();
   const towns = points.map(()=>[]);
   const aiKings = new Map();
@@ -396,7 +398,10 @@ export function createWorld(host, select, publish) {
       event.preventDefault();
       if (!event.repeat && lift===0 && !pressed.has('shift')) velocity=10;
     }
-    if (k==='e' && nearest!==null && !event.repeat) select(nearest);
+    if (k==='e'&&!event.repeat) {
+      if(atOffice())openOffice();
+      else if(nearest!==null)select(nearest);
+    }
   }
   function keyup(event) {
     const k=keys(event);
@@ -406,11 +411,32 @@ export function createWorld(host, select, publish) {
   window.addEventListener('keyup',keyup);
   window.addEventListener('blur',()=>{pressed.clear();dirty=true;});
   const view=renderer.domElement;
+  function mouseLook(dx,dy) {
+    if(!active||!actor)return;
+    yaw-=dx*.0033;
+    pitch=clamp(pitch-dy*.0028,-1.06,1.06);
+    dirty=true;
+  }
+  document.addEventListener('mousemove',event=>{
+    if(document.pointerLockElement===view)mouseLook(event.movementX,event.movementY);
+  });
+  view.addEventListener('mousemove',event=>{
+    if(!document.pointerLockElement&&!drag)mouseLook(event.movementX,event.movementY);
+  });
+  function lockPointer() {
+    if(!actor||document.pointerLockElement===view||!view.requestPointerLock)return;
+    try { view.requestPointerLock()?.catch(()=>{}); } catch {}
+  }
   view.addEventListener('wheel',event=>{
     event.preventDefault();
     zoom=clamp(zoom*Math.exp(event.deltaY*.001),.66,1.75);
   },{passive:false});
   view.addEventListener('pointerdown',event=>{
+    if(event.pointerType==='mouse'&&actor){
+      view.focus({preventScroll:true});
+      lockPointer();
+      return;
+    }
     drag={x:event.clientX,y:event.clientY,yaw};
     view.setPointerCapture(event.pointerId);
     view.focus({preventScroll:true});
@@ -451,6 +477,19 @@ export function createWorld(host, select, publish) {
     feet[0].rotation.x=walking ? .55*Math.sin(now*.012) : 0;
     feet[1].rotation.x=-feet[0].rotation.x;
   }
+  function atOffice(){
+    if(!actor||seat===null)return false;
+    const desk=townsBySeat[seat].office;
+    return Math.hypot(actor.position.x-desk.x,actor.position.z-desk.z)<=desk.radius;
+  }
+  function blocked(x,z,headroom){
+    return obstacles.some(o=>headroom<o.h&&Math.abs(x-o.x)<o.w/2+.33&&Math.abs(z-o.z)<o.d/2+.33);
+  }
+  function floorAt(x,z){
+    const dz=crossings.find(value=>Math.abs(z-value)<1.86);
+    if(dz!==undefined&&Math.abs(x-river(dz))<11)return Math.max(height(x,z),height(river(dz),dz)+4.72);
+    return height(x,z);
+  }
   function frame(now,dt) {
     if (!active) return;
     if (actor) {
@@ -463,15 +502,18 @@ export function createWorld(host, select, publish) {
       }
       const moving=Math.hypot(dx,dz);
       if (moving) {
-        const speed=pressed.has('shift')?6:17;
-        const x=clamp(actor.position.x+dx/moving*speed*dt,-limit,limit);
-        const z=clamp(actor.position.z+dz/moving*speed*dt,-limit,limit);
-        if (!points.some(([a,b])=>Math.abs(a-x)<5.8&&Math.abs(b-z)<5.8)) {
-          actor.position.set(x,height(x,z)+.03,z);
+        const speed=pressed.has('shift')?5:19;
+        const steps=Math.max(1,Math.ceil(speed*dt/.34));
+        for(let step=0;step<steps;step++){
+          const x=clamp(actor.position.x+dx/moving*speed*dt/steps,-limit,limit);
+          const z=clamp(actor.position.z+dz/moving*speed*dt/steps,-limit,limit);
+          if(!blocked(x,actor.position.z,lift))actor.position.x=x;
+          if(!blocked(actor.position.x,z,lift))actor.position.z=z;
         }
-        actor.rotation.y=Math.atan2(dx,dz);
+        actor.position.y=floorAt(actor.position.x,actor.position.z)+.05;
         dirty=true;
       }
+      actor.rotation.y=Math.atan2(-Math.sin(yaw),-Math.cos(yaw));
       if (lift>0||velocity>0) {
         lift=Math.max(0,lift+velocity*dt);
         velocity=lift>0?velocity-24*dt:0;
@@ -480,7 +522,7 @@ export function createWorld(host, select, publish) {
       state(actor,!!moving,now);
       actor.userData.figure.position.y+=lift;
       actor.userData.figure.scale.y=pressed.has('shift')?.62:1;
-      let distance=14;
+      let distance=32;
       nearest=null;
       points.forEach(([x,z],id)=>{
         const d=Math.hypot(x-actor.position.x,z-actor.position.z);
@@ -493,12 +535,39 @@ export function createWorld(host, select, publish) {
       }
     }
     const focus=actor?.position ?? castleGroups[0].position;
+    const inside=actor&&interiors.find(room=>Math.abs(focus.x-room.x)<room.w/2&&Math.abs(focus.z-room.z)<room.d/2);
+    const eye=actor&&(firstPerson||inside);
+    const office=atOffice();
+    if(actor) actor.userData.figure.visible=!eye;
+    reticle.hidden=!eye;
+    placeHint.hidden=!office&&!inside;
+    placeHint.textContent=office?'왕의 집무실 · E로 집무 시작':inside?.kind==='office'?'왕궁 · 책상 앞으로 이동하세요':inside?.kind==='shop'?'상점':'주택';
+    lantern.visible=!!inside;
+    if(inside)lantern.position.set(inside.x-.72,inside.level+(inside.kind==='office'?3.4:2.9),inside.z-.8);
     currentZoom+=(zoom-currentZoom)*(1-Math.exp(-dt*9));
-    const distance=(actor?16:65)*currentZoom;
+    const distance=(actor?15:81)*currentZoom;
     lastX=focus.x;lastZ=focus.z;
-    const x=lastX+Math.sin(yaw)*distance,z=lastZ+Math.cos(yaw)*distance;
-    camera.position.set(x,Math.max(focus.y+(actor?7.5*currentZoom:46*currentZoom),height(x,z)+3),z);
-    look.set(lastX,focus.y+(actor?1.55:1),lastZ);
+    if(eye){
+      const y=focus.y+(pressed.has('shift')?1.52:2.6)+lift;
+      camera.position.set(lastX,y,lastZ);
+      look.set(lastX-Math.sin(yaw)*Math.cos(pitch),y+Math.sin(pitch),lastZ-Math.cos(yaw)*Math.cos(pitch));
+    }else{
+      const angle=actor?clamp(.31+pitch*.52,-.04,.93):.55;
+      const cx=lastX+Math.sin(yaw)*distance*Math.cos(angle),cz=lastZ+Math.cos(yaw)*distance*Math.cos(angle);
+      const cy=Math.max(focus.y+distance*Math.sin(angle)+2,height(cx,cz)+2.45);
+      const aim=focus.y+(actor?1.8+lift:3);
+      let t=1;
+      if(actor&&nearest!==null){
+        for(let i=2;i<=38;i++){
+          const sample=i/38;
+          const sx=THREE.MathUtils.lerp(lastX,cx,sample),sz=THREE.MathUtils.lerp(lastZ,cz,sample);
+          const sy=THREE.MathUtils.lerp(aim,cy,sample)-floorAt(sx,sz);
+          if(blocked(sx,sz,sy)){t=Math.max(.08,sample-.05);break;}
+        }
+      }
+      camera.position.set(THREE.MathUtils.lerp(lastX,cx,t),THREE.MathUtils.lerp(aim,cy,t),THREE.MathUtils.lerp(lastZ,cz,t));
+      look.set(lastX,aim,lastZ);
+    }
     camera.lookAt(look);
     camera.updateMatrixWorld();
     sky.position.copy(camera.position);
@@ -520,7 +589,7 @@ export function createWorld(host, select, publish) {
     labels.forEach((label,id)=>{
       const p=castleGroups[id].position;
       marker.set(p.x,p.y+13,p.z).project(camera);
-      const visible=marker.z>0&&marker.z<1&&Math.abs(marker.x)<.92&&Math.abs(marker.y)<.88;
+      const visible=!inside&&marker.z>0&&marker.z<1&&Math.abs(marker.x)<.92&&Math.abs(marker.y)<.88;
       label.hidden=!visible;
       label.classList.toggle('near',nearest===id);
       label.style.left=(marker.x*.5+.5)*100+'%';
@@ -547,17 +616,23 @@ export function createWorld(host, select, publish) {
   }
   let previous=performance.now();
   renderer.setAnimationLoop(now=>{
-    const dt=Math.min(.045,(now-previous)/1000);
+    const dt=Math.min(.12,(now-previous)/1000);
     previous=now;
     frame(now,dt);
   });
 
   return {
-    activate(value) {active=value;pressed.clear();destination=null;},
+    activate(value) {
+      active=value;pressed.clear();destination=null;drag=null;
+      if(!value&&document.pointerLockElement===view)document.exitPointerLock();
+    },
     atHome() {return seat!==null && nearest===seat;},
+    atOffice,
+    lockPointer,
+    toggleView(){firstPerson=!firstPerson;return firstPerson;},
     settlements(players) {
       for (const p of players) {
-        const list=towns[p.id], count=Math.min(8,p.citizens);
+        const list=towns[p.id], count=clamp(p.citizens,0,8);
         while (list.length>count) scene.remove(list.pop());
         while (list.length<count) {
           const body=new THREE.Group();
@@ -586,11 +661,13 @@ export function createWorld(host, select, publish) {
       actor=null;
       if (id===null) return;
       actor=monarch(castles[id][4]);
-      const [a,b]=points[id];
-      const x=position?.x??a,z=position?.z??b+9;
-      actor.position.set(x,height(x,z)+.04,z);
-      actor.rotation.y=position?.yaw??Math.PI;
-      yaw=0;lift=0;velocity=0;dirty=true;
+      const spawn=townsBySeat[id].spawn;
+      const saved=position&&Math.abs(position.x)<=limit&&Math.abs(position.z)<=limit&&!blocked(position.x,position.z,0)?position:null;
+      const x=saved?.x??spawn.x,z=saved?.z??spawn.z;
+      actor.position.set(x,floorAt(x,z)+.05,z);
+      actor.rotation.y=saved?.yaw??Math.PI;
+      yaw=saved?.yaw===undefined?0:saved.yaw-Math.PI;
+      pitch=0;lift=0;velocity=0;dirty=true;
     },
     population(positions,players,self) {
       const seen=new Set();
@@ -601,11 +678,11 @@ export function createWorld(host, select, publish) {
         seen.add(uid);
         if (!others.has(uid)) {
           const model=monarch(castles[id][4]);
-          model.position.set(p.x,height(p.x,p.z),p.z);
+          model.position.set(p.x,floorAt(p.x,p.z),p.z);
           others.set(uid,{model,target:new THREE.Vector3(),heading:0});
         }
         const other=others.get(uid);
-        other.target.set(p.x,height(p.x,p.z),p.z);
+        other.target.set(p.x,floorAt(p.x,p.z),p.z);
         other.heading=p.yaw;
         other.lift=p.lift??0;
         other.crouch=p.crouch===true;
