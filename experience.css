@@ -1,0 +1,53 @@
+body.in-realm{overflow:hidden;background:#202a20}
+.in-realm> .wrap>header{display:none}
+#play{--spacing:clamp(12px,2.1vw,32px);--panel-width:clamp(278px,25vw,354px);--hud:#20231ced;color:#f4ebd8}
+#play .map{position:fixed;inset:0;width:100%;height:100%;height:100dvh;min-height:0;aspect-ratio:auto;z-index:0;background:#a4b7c1}
+#play .map canvas{inset:0;outline:none}
+#play .world-label{background:#171d17e8;border:1px solid #d6ba7d68;padding:4px 10px;box-shadow:0 3px 10px #171c15a6}
+#play .world-label.near{border-color:var(--flag)}
+#play .realm-bar,#play .stats,#play aside,#play .caption,#play .record,#play .end{position:fixed;z-index:2}
+#play .realm-bar{top:var(--spacing);left:var(--spacing);right:var(--spacing);margin:0;align-items:center;gap:10px;pointer-events:none}
+.room-identity,.realm-actions,#play .stats,#play .caption,#play .record{background:var(--hud);border:1px solid #bca36a70;border-radius:8px;box-shadow:0 8px 27px #12181040}
+.room-identity,.realm-actions{display:flex;align-items:center;gap:8px;padding:7px 9px;pointer-events:auto}
+.room-identity{padding-right:13px}
+.room-identity strong,.room-identity #activeRoom{display:block;line-height:1.28}
+#activeRoom{font:11px/1.35 ui-monospace,monospace;color:#b7ad95}
+#occupancy{padding-left:8px;margin-left:2px;border-left:1px solid #9f8b5f50;white-space:nowrap}
+.realm-mark{display:grid;place-items:center;width:32px;height:33px;border:1px solid #c7a76670;border-radius:4px;color:#f0c778;font-size:21px;background:#54412182}
+.realm-actions button{padding:5px 9px;white-space:nowrap;background:#38392b}
+.realm-actions button[aria-pressed=true],.realm-actions button[aria-expanded=true]{border-color:#d3b372;color:#efd091}
+.realm-actions kbd,.shortcuts kbd{font:600 11px/1.25 system-ui,sans-serif;background:#d2bb7d29;color:#f4d994;padding:2px 5px;border-radius:3px;white-space:nowrap}
+#play .stats{top:calc(var(--spacing) + 62px);left:var(--spacing);width:min(392px,calc(100vw - 2 * var(--spacing)));margin:0;gap:0}
+#play .stats div{background:transparent;padding:5px 7px;border-right:1px solid #9f8b5f50;white-space:nowrap}
+#play .stats small{font-size:11px}
+#play .stats div:last-child{border-right:0}
+#play aside{top:calc(var(--spacing) + 62px);right:var(--spacing);bottom:calc(var(--spacing) + 48px);width:var(--panel-width);overflow:auto;align-content:start;padding:0 1px 3px;scrollbar-width:thin;scrollbar-color:#8e7853 #282920}
+#play aside .box{background:var(--hud);box-shadow:0 8px 25px #10180c36;border-color:#bca36a70}
+#play aside .heading{padding:10px 14px}
+#play aside h2{font-size:21px}
+#play aside .content{padding:10px 13px}
+#play .caption{bottom:var(--spacing);left:50%;max-width:calc(100vw - 2 * var(--spacing));width:max-content;transform:translateX(-50%);padding:7px 10px;text-align:center;pointer-events:none}
+.shortcuts kbd:not(:first-child){margin-left:5px}
+#play .record{left:var(--spacing);bottom:calc(var(--spacing) + 43px);width:min(290px,calc(100vw - 2 * var(--spacing)));margin:0}
+#play .record summary{cursor:pointer;padding:6px 11px;color:#e4c681;font-size:13px}
+#play .record ol{max-height:min(160px,24dvh);font-size:13px}
+#play .end{top:calc(var(--spacing) + 125px);left:var(--spacing);max-width:calc(100vw - 2 * var(--spacing));width:max-content}
+.in-realm #feedback:not(:empty){position:fixed;z-index:3;bottom:calc(var(--spacing,20px) + 48px);left:50%;max-width:min(550px,90vw);width:max-content;transform:translateX(-50%);padding:6px 12px;margin:0;background:#241f17eb;border:1px solid #d1af6a81;border-radius:6px;pointer-events:none;text-align:center}
+.in-realm #feedback:empty{display:none}
+@media(max-width:900px){
+  #play .realm-bar{display:grid;justify-items:start;justify-content:stretch;gap:5px}
+  .room-identity{padding:4px 7px}
+  .room-identity #occupancy{display:none}
+  .realm-actions{flex-wrap:nowrap;padding:4px;max-width:100%;gap:4px;overflow:auto}
+  .realm-actions button{font-size:12px;padding:4px 6px}
+  .realm-actions kbd,.mouse-hint{display:none}
+  #play .stats{top:calc(var(--spacing) + 89px);width:min(350px,calc(100vw - 2 * var(--spacing)))}
+  #play aside{top:calc(var(--spacing) + 149px);width:min(330px,calc(100vw - 2 * var(--spacing)))}
+  #play .end{top:calc(var(--spacing) + 150px)}
+  #play .record{width:min(200px,calc(100vw - 2 * var(--spacing)))}
+  #play .caption{font-size:11px}
+}
+@media(max-height:520px) and (min-width:901px){
+  #play aside{bottom:var(--spacing)}
+  #play .stats{width:min(335px,calc(100vw - var(--panel-width) - 3 * var(--spacing)))}
+}

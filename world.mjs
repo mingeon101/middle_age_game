@@ -14,37 +14,117 @@ const clamp = (n,min,max) => Math.min(max,Math.max(min,n));
 
 export function createWorld(host, select, publish) {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#a8b9b3');
-  scene.fog = new THREE.FogExp2('#a8b9b3',.006);
-  scene.add(new THREE.HemisphereLight('#fff4d7','#484738',2.4));
-  const sun = new THREE.DirectionalLight('#ffe7b0',2.1);
-  sun.position.set(-70,90,25);
-  scene.add(sun);
-  const camera = new THREE.PerspectiveCamera(52,1,.2,400);
-  const renderer = new THREE.WebGLRenderer({antialias:true});
-  renderer.setPixelRatio(Math.min(1.7,window.devicePixelRatio||1));
+  scene.fog = new THREE.FogExp2('#a4b7bb',.0041);
+  scene.add(new THREE.HemisphereLight('#d8ebff','#524c3b',1.55));
+  const sun = new THREE.DirectionalLight('#ffe0a7',2.75);
+  sun.castShadow=true;
+  sun.shadow.mapSize.set(1024,1024);
+  Object.assign(sun.shadow.camera,{left:-39,right:39,top:39,bottom:-39,near:1,far:147});
+  sun.shadow.camera.updateProjectionMatrix();
+  sun.shadow.normalBias=.055;
+  sun.shadow.bias=-.0002;
+  scene.add(sun,sun.target);
+  const camera = new THREE.PerspectiveCamera(53,1,.2,525);
+  const renderer = new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure=1.13;
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate=false;
+  renderer.setPixelRatio(Math.min(1.5,window.devicePixelRatio||1));
   renderer.domElement.setAttribute('aria-label','3D 왕국. WASD 또는 방향키로 왕을 움직입니다.');
   renderer.domElement.tabIndex = 0;
   host.prepend(renderer.domElement);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(390,28,18),new THREE.ShaderMaterial({
+    side:THREE.BackSide,
+    depthWrite:false,
+    uniforms:{
+      horizon:{value:new THREE.Color('#baccd0')},
+      zenith:{value:new THREE.Color('#52779f')},
+      light:{value:new THREE.Vector3(-.73,.55,.28).normalize()}
+    },
+    vertexShader:`varying vec3 direction;
+      void main(){direction=normalize(position);gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+    fragmentShader:`varying vec3 direction;
+      uniform vec3 horizon;uniform vec3 zenith;uniform vec3 light;
+      float random(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+      float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+        return mix(mix(random(i),random(i+vec2(1,0)),f.x),mix(random(i+vec2(0,1)),random(i+vec2(1,1)),f.x),f.y);}
+      void main(){vec3 d=normalize(direction);float h=max(d.y,0.0);
+        vec3 col=mix(horizon,zenith,pow(h,.53));
+        vec2 q=d.xz/(.22+h)*3.8;
+        float n=.55*noise(q)+.27*noise(q*2.06)+.12*noise(q*4.18)+.06*noise(q*8.);
+        float clouds=smoothstep(.49,.68,n)*smoothstep(.02,.23,h)*(1.-smoothstep(.57,.98,h));
+        col=mix(col,vec3(.84,.87,.87),clouds*.8);
+        float glow=max(dot(d,light),0.);
+        col+=vec3(.34,.19,.075)*pow(glow,12.)+vec3(.65,.49,.27)*pow(glow,190.);
+        gl_FragColor=vec4(col,1.);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`
+  }));
+  sky.renderOrder=-100;
+  sky.frustumCulled=false;
+  scene.add(sky);
   const geometry = new THREE.PlaneGeometry(220,220,104,104);
   geometry.rotateX(-Math.PI/2);
   const verts = geometry.attributes.position;
-  const colors = [];
+  const colors = [], fieldUV = geometry.attributes.uv;
   const color = new THREE.Color();
+  const grassTint = new THREE.Color('#89905c');
   for (let i=0;i<verts.count;i++) {
     const x=verts.getX(i), z=verts.getZ(i), y=height(x,z);
     verts.setY(i,y);
-    color.set(y>10?'#8a8877':Math.abs(x-river(z))<9?'#999575':'#6b804b');
-    color.multiplyScalar(.87+.12*(1+Math.sin(x*.49+z*.7))/2+.05*Math.sin(z*.2));
+    color.set(y>10?'#8a8a79':Math.abs(x-river(z))<8?'#908975':'#657949');
+    color.lerp(grassTint,.12*(2+Math.sin(x*.085)+Math.cos(z*.11)));
+    color.multiplyScalar(.92+.07*Math.sin(x*.49+z*.7)+.08*Math.sin(z*.2));
     colors.push(color.r,color.g,color.b);
+    fieldUV.setXY(i,x/14,z/14);
   }
   geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
   geometry.computeVertexNormals();
-  scene.add(new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({vertexColors:true,flatShading:true})));
+  const ground = new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.97,flatShading:true}));
+  ground.receiveShadow=true;
+  scene.add(ground);
 
   const mats = new Map(), boxes = new Map();
+  function surface(paint,repeat=false) {
+    const canvas=document.createElement('canvas');
+    canvas.width=128;
+    canvas.height=128;
+    paint(canvas.getContext('2d'));
+    const result=new THREE.CanvasTexture(canvas);
+    result.colorSpace=THREE.SRGBColorSpace;
+    if(repeat)result.wrapS=result.wrapT=THREE.RepeatWrapping;
+    result.anisotropy=Math.min(6,renderer.capabilities.getMaxAnisotropy());
+    return result;
+  }
+  const fieldTexture=surface(ctx=>{
+    ctx.fillStyle='#eeeeea';ctx.fillRect(0,0,128,128);
+    let grain=12931;
+    for(let i=0;i<3200;i++){
+      grain=(Math.imul(grain,1664525)+1013904223)>>>0;
+      const x=grain>>>25,z=(grain>>>14)&127;
+      ctx.fillStyle=i%2?'#fff6':'#61584828';
+      ctx.fillRect(x,z,1+i%3,1);
+    }
+  },true);
+  ground.material.map=fieldTexture;
+  const stoneTexture=surface(ctx=>{
+    ctx.fillStyle='#a5a095';ctx.fillRect(0,0,128,128);
+    for(let y=0;y<8;y++)for(let x=-1;x<5;x++){
+      const tint=214+(x*47+y*37+224)%30;
+      const px=x*32+(y%2)*16,py=y*16;
+      ctx.fillStyle='rgb('+tint+','+tint+','+(tint-5)+')';
+      ctx.fillRect(px+1,py+1,30,14);
+      ctx.fillStyle='#fff5';ctx.fillRect(px+2,py+2,27,1);
+    }
+  });
+  const stoneColors=new Set(['#909188','#b4ad93','#787b74','#9b988f']);
   function material(hex) {
-    if (!mats.has(hex)) mats.set(hex,new THREE.MeshStandardMaterial({color:hex,flatShading:true}));
+    if (!mats.has(hex)) mats.set(hex,new THREE.MeshStandardMaterial({
+      color:hex,flatShading:true,map:stoneColors.has(hex)?stoneTexture:null
+    }));
     return mats.get(hex);
   }
   function mesh(parent,geo,hex,x,y,z) {
@@ -78,11 +158,26 @@ export function createWorld(host, select, publish) {
   }
   const water = new THREE.BufferGeometry();
   water.setAttribute('position',new THREE.Float32BufferAttribute(riverVerts,3));
+  const waterUV=[];
+  for(let i=0;i<riverVerts.length;i+=3)waterUV.push(riverVerts[i]/11,riverVerts[i+2]/14);
+  water.setAttribute('uv',new THREE.Float32BufferAttribute(waterUV,2));
   water.computeVertexNormals();
-  const waterMat = new THREE.MeshStandardMaterial({color:'#487e86',side:THREE.DoubleSide,roughness:.37});
+  const ripples=surface(ctx=>{
+    ctx.fillStyle='#aebdcc';ctx.fillRect(0,0,128,128);
+    for(let y=4;y<=128;y+=8){
+      ctx.strokeStyle=y%5?'#e8f8f3a0':'#447b9b88';
+      ctx.beginPath();
+      for(let x=0;x<=128;x+=4){
+        const py=y+2*Math.sin(x/128*Math.PI*4+y*.28);
+        if(x===0)ctx.moveTo(x,py);else ctx.lineTo(x,py);
+      }
+      ctx.stroke();
+    }
+  },true);
+  const waterMat = new THREE.MeshStandardMaterial({color:'#568d9c',map:ripples,side:THREE.DoubleSide,roughness:.33});
   scene.add(new THREE.Mesh(water,waterMat));
 
-  const routeMat = new THREE.MeshStandardMaterial({color:'#ae9b73',side:THREE.DoubleSide});
+  const routeMat = new THREE.MeshStandardMaterial({color:'#ae9b73',map:fieldTexture,side:THREE.DoubleSide});
   function route(a,b) {
     const vertices=[];
     for (let i=0;i<32;i++) {
@@ -96,8 +191,13 @@ export function createWorld(host, select, publish) {
     }
     const trail = new THREE.BufferGeometry();
     trail.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
+    const uv=[];
+    for(let i=0;i<vertices.length;i+=3)uv.push(vertices[i]/12,vertices[i+2]/12);
+    trail.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
     trail.computeVertexNormals();
-    scene.add(new THREE.Mesh(trail,routeMat));
+    const road=new THREE.Mesh(trail,routeMat);
+    road.receiveShadow=true;
+    scene.add(road);
   }
   const paths = [[0,1],[1,2],[2,3],[3,0],[1,3]];
   for (const [a,b] of paths) route(points[a],points[b]);
@@ -112,7 +212,28 @@ export function createWorld(host, select, publish) {
     randomState=(1664525*randomState+1013904223)>>>0;
     return randomState/4294967296;
   }
+  for (let ridge=0;ridge<3;ridge++) {
+    const radius=143+ridge*35;
+    const vertices=[];
+    let previous;
+    for(let i=0;i<=56;i++){
+      const angle=i/56*Math.PI*2;
+      const peak=[Math.cos(angle)*radius,14+ridge*5+random()*(19+ridge*8),Math.sin(angle)*radius];
+      if(previous){
+        const c=[previous[0]*.91,-13,previous[2]*.91], d=[peak[0]*.91,-13,peak[2]*.91];
+        vertices.push(...previous,...c,...peak,...peak,...c,...d);
+      }
+      previous=peak;
+    }
+    const silhouette=new THREE.BufferGeometry();
+    silhouette.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
+    silhouette.computeVertexNormals();
+    scene.add(new THREE.Mesh(silhouette,new THREE.MeshStandardMaterial({
+      color:['#657474','#7c919c','#90a5b4'][ridge],side:THREE.DoubleSide,flatShading:true
+    })));
+  }
   const cone=new THREE.ConeGeometry(1,1,6), rock=new THREE.DodecahedronGeometry(1,0);
+  const trees=[];
   for (let i=0;i<210;i++) {
     const x=random()*188-94,z=random()*184-92,y=height(x,z);
     if (Math.abs(river(z)-x)<8||points.some(([a,b])=>Math.hypot(a-x,b-z)<13)) continue;
@@ -122,13 +243,38 @@ export function createWorld(host, select, publish) {
       stone.scale.set(1+random()*2,1+random()*2,1+random()*2);
     } else {
       const size=2+random()*3;
-      box(scene,.46,size*.6,.46,'#634e34',x,y+size*.25,z);
-      const tree=mesh(scene,cone,i%2?'#485f3d':'#3b5540',x,y+size*.76,z);
-      tree.scale.set(size*.39,size,size*.39);
-      shadow(scene,x+.5,y,z+.5,size*.45,size*.32);
+      trees.push({x,y,z,size});
     }
   }
+  const canopy=new THREE.InstancedMesh(cone,material('#5b7449'),trees.length*2);
+  const trunks=new THREE.InstancedMesh(new THREE.CylinderGeometry(.18,.29,1,6),material('#665039'),trees.length);
+  const tufts=new THREE.InstancedMesh(cone,material('#929654'),600);
+  const dummy=new THREE.Object3D();
+  function instance(batch,index,x,y,z,sx,sy,sz,spin) {
+    dummy.position.set(x,y,z);
+    dummy.scale.set(sx,sy,sz);
+    dummy.rotation.y=spin;
+    dummy.updateMatrix();
+    batch.setMatrixAt(index,dummy.matrix);
+  }
+  trees.forEach(({x,y,z,size},i)=>{
+    instance(trunks,i,x,y+size*.29,z,1,size*.62,1,0);
+    for(let j=0;j<2;j++){
+      instance(canopy,i*2+j,x,y+size*(.73+j*.31),z,size*(.40-j*.09),size*.86,size*(.4-j*.09),i*.71);
+      canopy.setColorAt(i*2+j,color.setHSL(.19+random()*.07,.19+random()*.17,.66+random()*.28));
+    }
+  });
+  for(let i=0;i<600;i++){
+    let x,z;
+    do{x=random()*174-87;z=random()*170-85;}
+    while(Math.abs(x-river(z))<6.5||points.some(([a,b])=>Math.hypot(a-x,b-z)<8));
+    const scale=.35+random()*.77;
+    instance(tufts,i,x,height(x,z)+scale*.21,z,scale*.25,scale,scale*.3,i);
+  }
+  canopy.castShadow=true;trunks.castShadow=true;canopy.receiveShadow=true;tufts.receiveShadow=true;
+  scene.add(canopy,trunks,tufts);
 
+  const banners=[];
   const castleGroups = points.map(([x,z],id) => {
     const g = new THREE.Group();
     const flag=castles[id][4];
@@ -145,8 +291,22 @@ export function createWorld(host, select, publish) {
     const cap = mesh(g,new THREE.ConeGeometry(3.65,2.7,4),roof,0,9.2,-1.6);
     cap.rotation.y=Math.PI/4;
     box(g,.1,2,.1,'#47382a',0,11,-1.6);
-    box(g,1.7,.8,.09,flag,.85,11.5,-1.6);
+    const cloth=new THREE.PlaneGeometry(2.35,.92,10,3);
+    const banner=mesh(g,cloth,flag,1.18,11.5,-1.6);
+    banner.material=material(flag).clone();
+    banner.material.side=THREE.DoubleSide;
+    banners.push(cloth);
     box(g,2.45,3.3,.28,'#443c30',0,1.65,4.94);
+    for(const dx of [-.88,-.44,0,.44,.88])box(g,.11,3.1,.18,'#a48659',dx,1.62,5.13);
+    for(const dy of [1.0,2.25])box(g,2.24,.13,.19,'#554739',0,dy,5.2);
+    for(const dx of [-1.78,1.78]){
+      box(g,.65,3.1,.83,'#787b74',dx,1.48,5.12);
+      box(g,.79,.22,.9,'#9b988f',dx,2.89,5.12);
+    }
+    box(g,4.2,.42,.92,'#9b988f',0,3.32,5.16);
+    box(g,.68,.94,.14,flag,0,4.51,5.39);
+    box(g,.11,.42,.08,'#e6d29e',0,4.56,5.48);
+    box(g,.33,.10,.08,'#e6d29e',0,4.61,5.48);
     for (const dx of [-5,5]) for (const dz of [-5,5]) {
       box(g,2.35,5.8,2.35,stone,dx,2.8,dz);
       box(g,2.65,.45,2.65,'#797669',dx,5.8,dz);
@@ -156,6 +316,9 @@ export function createWorld(host, select, publish) {
       box(g,.27,.77,.11,'#47433a',dx,4.15,dz+1.18);
     }
     for (const dx of [-1.4,1.4]) box(g,.33,1,.11,'#514d42',dx,5.9,.59);
+    g.traverse(node=>{
+      if(node.isMesh&&node.geometry!==shadowGeo){node.castShadow=true;node.receiveShadow=true;}
+    });
     scene.add(g);
     for (const dx of [-7.5,7.5]) {
       const sx=x+dx, sz=z+7, base=height(sx,sz);
@@ -203,12 +366,14 @@ export function createWorld(host, select, publish) {
     });
     root.userData.figure=figure;
     root.userData.feet=feet;
+    figure.traverse(node=>{if(node.isMesh)node.castShadow=true;});
     scene.add(root);
     return root;
   }
 
   let actor, seat=null, yaw=0, lastSent=0, dirty=false, nearest=null, active=false;
   let destination=null, lastX=0,lastZ=0, lift=0, velocity=0;
+  let zoom=1,currentZoom=1,lastShadow=-Infinity;
   const others = new Map();
   const towns = points.map(()=>[]);
   const aiKings = new Map();
@@ -241,6 +406,10 @@ export function createWorld(host, select, publish) {
   window.addEventListener('keyup',keyup);
   window.addEventListener('blur',()=>{pressed.clear();dirty=true;});
   const view=renderer.domElement;
+  view.addEventListener('wheel',event=>{
+    event.preventDefault();
+    zoom=clamp(zoom*Math.exp(event.deltaY*.001),.66,1.75);
+  },{passive:false});
   view.addEventListener('pointerdown',event=>{
     drag={x:event.clientX,y:event.clientY,yaw};
     view.setPointerCapture(event.pointerId);
@@ -268,7 +437,6 @@ export function createWorld(host, select, publish) {
       if (floor) destination=floor.point;
     }
   });
-  const ground=scene.children.find(node=>node.geometry===geometry);
   const size = new ResizeObserver(()=>{
     if (!host.clientWidth || !host.clientHeight) return;
     renderer.setSize(host.clientWidth,host.clientHeight,false);
@@ -325,13 +493,30 @@ export function createWorld(host, select, publish) {
       }
     }
     const focus=actor?.position ?? castleGroups[0].position;
-    const distance=actor?14:69;
+    currentZoom+=(zoom-currentZoom)*(1-Math.exp(-dt*9));
+    const distance=(actor?16:65)*currentZoom;
     lastX=focus.x;lastZ=focus.z;
     const x=lastX+Math.sin(yaw)*distance,z=lastZ+Math.cos(yaw)*distance;
-    camera.position.set(x,Math.max(focus.y+(actor?8.3:53),height(x,z)+3),z);
+    camera.position.set(x,Math.max(focus.y+(actor?7.5*currentZoom:46*currentZoom),height(x,z)+3),z);
     look.set(lastX,focus.y+(actor?1.55:1),lastZ);
     camera.lookAt(look);
     camera.updateMatrixWorld();
+    sky.position.copy(camera.position);
+    ripples.offset.set(Math.sin(now*.00042)*.045,-now*.00005%1);
+    for(const cloth of banners){
+      const positions=cloth.attributes.position;
+      for(let i=0;i<positions.count;i++){
+        const u=(positions.getX(i)+1.175)/2.35;
+        positions.setZ(i,u*.34*Math.sin(u*6-now*.005));
+      }
+      positions.needsUpdate=true;
+    }
+    if(now-lastShadow>105){
+      sun.target.position.set(focus.x,focus.y,focus.z);
+      sun.position.set(focus.x-62,focus.y+49,focus.z+25);
+      renderer.shadowMap.needsUpdate=true;
+      lastShadow=now;
+    }
     labels.forEach((label,id)=>{
       const p=castleGroups[id].position;
       marker.set(p.x,p.y+13,p.z).project(camera);
@@ -404,7 +589,7 @@ export function createWorld(host, select, publish) {
       const [a,b]=points[id];
       const x=position?.x??a,z=position?.z??b+9;
       actor.position.set(x,height(x,z)+.04,z);
-      actor.rotation.y=position?.yaw??0;
+      actor.rotation.y=position?.yaw??Math.PI;
       yaw=0;lift=0;velocity=0;dirty=true;
     },
     population(positions,players,self) {

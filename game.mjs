@@ -21,7 +21,12 @@ const app = initializeApp({
 const auth = getAuth(app), db = getDatabase(app);
 const $ = id => document.getElementById(id);
 const text = (id,value) => { $(id).textContent=value; };
-const feedback = message => text('feedback',message);
+let feedbackTimer;
+function feedback(message) {
+  clearTimeout(feedbackTimer);
+  text('feedback',message);
+  if (message && current) feedbackTimer=setTimeout(()=>text('feedback',''),5000);
+}
 const number = new Intl.NumberFormat('ko-KR');
 const castle = id => castles[id]?.[0] ?? '왕국';
 const kind = {alliance:'수교',truce:'휴전',trade:'교역'};
@@ -103,6 +108,8 @@ function closeRoom() {
   world?.player(null);
   world?.population({}, {}, null);
   world?.activate(false);
+  document.body.classList.remove('in-realm');
+  if(ctx&&document.fullscreenElement) document.exitFullscreen().catch(()=>{});
   $('statsDialog').close();
   $('play').hidden=true;
   $('roomGate').hidden=!auth.currentUser;
@@ -180,6 +187,8 @@ async function enter(code, create) {
     const ctx={code,uid,target,ownPosition:ref(db,'ironCrownV1/presence/'+code+'/'+uid+'/'+crypto.randomUUID())};
     current=ctx;
     $('play').hidden=false;
+    document.body.classList.add('in-realm');
+    showPanel(true);
     $('roomGate').hidden=true;
     text('activeRoom','초대 코드 '+code);
     selected=0;
@@ -218,7 +227,11 @@ function readGame(snapshot,ctx) {
   game=normalize(snapshot.val());
   const prior=me?.id;
   me=game.players.find(p=>p.id===game.members[ctx.uid]);
-  if(me&&me.id!==prior){selected=me.id;registerPosition(ctx);}
+  if(me&&me.id!==prior){
+    selected=me.id;
+    showPanel(false);
+    registerPosition(ctx);
+  }
   worldSnapshot();
   render();
 }
@@ -292,8 +305,32 @@ function act(payload) {
 function select(id) {
   selected=id;
   if (!me&&game?.players.find(p=>p.id===id)?.ai) $('seat').value=String(id);
+  showPanel(true);
   render();
 }
+$('panelButton').onclick=()=>showPanel($('management').hidden);
+function showPanel(visible) {
+  $('management').hidden=!visible;
+  $('panelButton').setAttribute('aria-expanded',String(visible));
+}
+
+$('fullscreen').onclick=toggleFullscreen;
+async function toggleFullscreen() {
+  if (!current) return;
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+    else feedback('이 브라우저에서는 창 크기에 맞춰 게임 화면을 표시합니다.');
+  } catch {
+    feedback('브라우저가 전체화면 전환을 허용하지 않았습니다.');
+  }
+}
+document.addEventListener('fullscreenchange',()=>{
+  const active=!!document.fullscreenElement;
+  $('fullscreen').setAttribute('aria-pressed',String(active));
+  $('fullscreen').firstChild.data=active?'전체화면 종료 ':'전체화면 ';
+  if (active) document.querySelector('#map canvas')?.focus({preventScroll:true});
+});
 $('seat').onchange=()=>select(Number($('seat').value));
 $('targetSelect').replaceChildren(...castles.map((c,id)=>new Option(c[0],String(id))));
 $('targetSelect').onchange=()=>select(Number($('targetSelect').value));
@@ -308,10 +345,9 @@ function toggleStats() {
   $('statsDialog').showModal();
 }
 window.addEventListener('keydown',event=>{
-  if(event.code==='KeyP'&&!event.repeat&&!/INPUT|TEXTAREA|SELECT/.test(event.target.tagName)){
-    event.preventDefault();
-    toggleStats();
-  }
+  if(!current||event.repeat||event.ctrlKey||event.metaKey||event.altKey||/INPUT|TEXTAREA|SELECT/.test(event.target.tagName))return;
+  if(event.code==='KeyP'){event.preventDefault();toggleStats();}
+  if(event.code==='KeyF'){event.preventDefault();toggleFullscreen();}
 });
 $('statsDialog').addEventListener('close',()=>world?.activate(!!current));
 $('statsDialog').addEventListener('cancel',()=>world?.activate(!!current));
