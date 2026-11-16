@@ -3,43 +3,68 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>철의 왕관</title>
+<title>철의 왕관 | 실시간 3D 왕국</title>
 <style>
 :root{color-scheme:dark;--ink:#f3e8d1;--muted:#b7ad95;--gold:#e4bd70;--line:#564831;--panel:#22241d;--bg:#171914}
 *{box-sizing:border-box}body{margin:0;color:var(--ink);background:var(--bg);font:15px/1.55 system-ui,sans-serif}button,input,select{font:inherit}button,input,select{border:1px solid var(--line);border-radius:5px;color:inherit;background:#2c2b22;padding:8px 12px}button{cursor:pointer}button:hover:not(:disabled){border-color:var(--gold);background:#413726}button:disabled{opacity:.45;cursor:default}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:3px}.gold{background:#d8ad60;color:#221a0d;font-weight:750}.gold:hover:not(:disabled){background:#f1c779}.danger{background:#592d25;border-color:#995342}.sub,small{color:var(--muted)}h1,h2,h3,p{margin:0}h1,h2{font-family:Georgia,"Batang",serif}h1{font-size:31px;letter-spacing:.08em}h2{font-size:24px}h3{font-size:16px}.wrap{max-width:1430px;margin:auto;padding:0 28px 34px}header{min-height:90px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);gap:12px}.brand{display:flex;align-items:center;gap:15px}.crest{display:grid;place-items:center;width:48px;height:54px;background:#38301f;color:var(--gold);font-size:29px;border:1px solid #8d7040;border-radius:4px 4px 20px 20px}.status{color:#b6d1a4;text-align:right}.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);border:1px solid var(--line);margin:20px 0;border-radius:7px;overflow:hidden}.stats div{background:var(--panel);padding:8px 14px}.stats strong{display:block;font-size:21px;font-variant-numeric:tabular-nums;color:var(--gold)}main{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:20px;align-items:start}.box{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}.heading{padding:14px 19px;border-bottom:1px solid var(--line)}.heading.flex{display:flex;justify-content:space-between;align-items:center;gap:10px}.map{position:relative;aspect-ratio:1.62;background:#2a392f;overflow:hidden;isolation:isolate}canvas{position:absolute;width:100%;height:100%}.castle{position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;gap:2px;padding:0;border:0;background:transparent;white-space:nowrap;color:var(--flag);text-shadow:0 2px 3px #000}.castle:hover:not(:disabled){background:transparent}.castle i{display:grid;place-items:center;font:normal 27px/1 system-ui;width:43px;height:43px;border-radius:50%;border:1px solid currentColor;background:#202720;box-shadow:0 3px 10px #0008}.castle[aria-pressed=true] i{outline:2px solid currentColor;outline-offset:4px}.castle b{border-radius:4px;background:#161b16eb;padding:2px 6px;font-size:13px}.compass{position:absolute;right:18px;bottom:12px;color:#efe3bf;font:24px/1 Georgia;text-align:center;text-shadow:0 2px 3px #000;pointer-events:none}.compass small{display:block;font-size:12px;color:inherit}.caption{padding:9px 18px;color:var(--muted)}aside{display:grid;gap:14px}.content{padding:14px 16px;display:grid;gap:10px}.row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}.actions{display:grid;gap:7px}.actions button{text-align:left}.actions button span{float:right;color:var(--muted);font-size:12px}.form{display:grid;gap:10px}.form label{display:grid;gap:3px}.form input,.form select{min-width:0;width:100%}.alert{margin:10px 0;color:#ffca95;min-height:1.55em}.record{margin-top:16px}.record ol{list-style:none;padding:0 16px;margin:0;max-height:180px;overflow:auto}.record li,.offer{padding:8px 0;border-bottom:1px solid #3d3b2e}.record li:last-child{border:0}.end{background:#3c301f;border:1px solid var(--gold);padding:10px 16px;margin-bottom:14px;border-radius:5px}.units{width:84px}.label{color:var(--gold)}[hidden]{display:none!important}
 @media(max-width:850px){main{grid-template-columns:1fr}.wrap{padding:0 14px 24px}.map{aspect-ratio:1.4}.heading{padding:10px 14px}}
 @media(max-width:475px){.stats div{padding:6px}.stats small{font-size:10px}.stats strong{font-size:17px}h1{font-size:23px}.crest{width:35px;height:42px}header{min-height:73px}.brand{gap:8px}.castle i{width:33px;height:33px;font-size:20px}.castle b{font-size:11px}.status{font-size:12px}}
+
+[hidden]{display:none!important}.realm-bar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin:16px 0}.gate{margin:16px 0}.gate .content{grid-template-columns:repeat(auto-fit,minmax(245px,1fr));gap:20px}.gate .form{max-width:430px}.map{aspect-ratio:1.65;background:linear-gradient(#a8b9b3,#495c3d);min-height:300px}.map canvas{display:block;touch-action:none}.world-label{position:absolute;z-index:1;transform:translate(-50%,-50%);white-space:nowrap;color:var(--flag);background:#1c231ae8;padding:3px 8px;font-size:13px;font-weight:700}.world-label.near{border-color:var(--gold)}.world-error{position:absolute;inset:16px;color:#211b13}.shortcuts kbd{color:var(--gold)}.modal{max-width:min(680px,95vw);width:100%;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);padding:19px}.modal::backdrop{background:#10100acc}.modal table{width:100%;border-collapse:collapse;margin-top:12px;text-align:right}.modal th,.modal td{padding:8px;border-bottom:1px solid var(--line)}.modal th:first-child{text-align:left}.modal .scroll{overflow:auto}.actions span{margin-left:8px}.caption .row{width:100%}
+@media(max-width:600px){.map{min-height:320px}.shortcuts{font-size:12px}.modal th,.modal td{font-size:12px;padding:6px}}
 </style>
 </head>
 <body>
 <div class="wrap">
-<header><div class="brand"><div class="crest" aria-hidden="true">♛</div><div><h1>철의 왕관</h1><p class="sub">실시간 중세 영지 전쟁</p></div></div><div class="status" id="connection" role="status">서버 연결 중</div></header>
+<header><div class="brand"><div class="crest" aria-hidden="true">♛</div><div><h1>철의 왕관</h1><p class="sub">실시간 3D 왕국</p></div></div><div class="status" id="connection" role="status">서버 연결 중</div></header>
+<section id="signin" class="box gate">
+  <div class="heading"><h2>로그인</h2></div>
+  <div class="content">
+    <form class="form" id="emailForm">
+      <label>이메일<input id="email" type="email" autocomplete="email" required></label>
+      <label>비밀번호<input id="password" type="password" minlength="6" autocomplete="current-password" required></label>
+      <div class="row"><button class="gold" value="login">이메일 로그인</button><button value="signup">회원가입</button></div>
+    </form>
+    <div class="actions"><button id="google">Google로 로그인</button><button id="guest">익명으로 시작</button></div>
+  </div>
+</section>
+<div id="roomGate" class="box gate" hidden>
+  <div class="heading"><div class="row"><h2>왕국에 입장</h2><button data-signout>로그아웃</button></div></div>
+  <div class="content">
+    <form id="roomForm" class="form"><label>초대 코드<input id="roomCode" maxlength="12" pattern="[A-Fa-f0-9]{12}" autocomplete="off" required></label><button>방 접속</button></form>
+    <div class="actions"><button id="createRoom" class="gold">새 방 만들기</button></div>
+  </div>
+</div>
+<p id="feedback" class="alert" role="status"></p>
+<div id="play" hidden>
+<div class="realm-bar"><div class="row"><strong id="activeRoom"></strong><button id="copyInvite">초대 링크 복사</button><button id="leaveRoom">방 나가기</button></div><button id="statsButton">왕국 통계 · P</button></div>
 <section class="stats" aria-label="내 영지 자원">
-<div><small>금화</small><strong id="gold">—</strong></div><div><small>식량</small><strong id="food">—</strong></div><div><small>주둔 병력</small><strong id="army">—</strong></div><div><small>명성</small><strong id="fame">—</strong></div><div><small>다음 수확</small><strong id="harvest">—</strong></div>
+<div><small>금화</small><strong id="gold">—</strong></div><div><small>식량</small><strong id="food">—</strong></div><div><small>주둔 병력</small><strong id="army">—</strong></div><div><small>명성</small><strong id="fame">—</strong></div><div><small>백성</small><strong id="citizens">—</strong></div>
 </section>
 <p id="winner" class="end" hidden></p>
-<p id="feedback" class="alert" role="status"></p>
 <main>
 <div>
 <section class="box"><div class="heading flex"><h2>왕국 지도</h2><small id="occupancy"></small></div>
-<div class="map" id="map"><canvas id="terrain" width="1000" height="620" aria-hidden="true"></canvas><div id="markers"></div><div class="compass" aria-hidden="true"><small>N</small>✧</div></div>
-<p class="caption">성 아이콘을 선택해 영주와 주둔 병력을 확인하세요.</p></section>
+<div class="map" id="map"></div>
+<div class="caption"><div class="row"><p class="shortcuts"><kbd>WASD</kbd> 이동 · <kbd>Shift</kbd> 웅크리기 · <kbd>Space</kbd> 점프 · <kbd>E</kbd> 가까운 성 보기</p></div><small>드래그로 시점을 돌리고, 땅을 클릭하면 그곳으로 걸어갑니다.</small></div></section>
 <section class="box record"><div class="heading"><h3>왕국 연대기</h3></div><ol id="logs"><li class="sub">아직 기록이 없습니다.</li></ol></section>
 </div>
 <aside>
 <section class="box" id="lobby"><div class="heading"><h2>영주로 입장</h2></div><form id="join" class="content form">
 <label>영주 이름<input id="lord" required maxlength="16" placeholder="이름 입력" autocomplete="nickname"></label>
 <label>시작할 성<select id="seat" required></select></label>
-<button class="gold" id="joinButton" disabled>영지에 부임</button><small>최대 6명이 각자의 성을 다스립니다. 공격에서 3번 승리하면 왕관을 차지합니다.</small>
+<button class="gold" id="joinButton" disabled>영지에 부임</button><small>왕국은 네 곳입니다. 플레이어가 선택하지 않은 성은 AI 왕이 다스립니다.</small>
 </form></section>
 <section class="box" id="estate" hidden><div class="heading"><h2 id="home"></h2><small id="levels"></small></div><div class="content actions">
-<button data-action="train">병력 +12 <span>금화 35 · 식량 20</span></button>
+<button data-action="train">군사 훈련 <span id="trainCost"></span></button>
 <button data-action="farm">농지 확장 <span id="farmCost"></span></button>
 <button data-action="wall">성벽 강화 <span id="wallCost"></span></button>
 </div></section>
-<section class="box"><div class="heading"><h2 id="target">성 정보</h2><small id="region">지도에서 성을 선택하세요.</small></div>
-<div class="content" id="details" hidden><p id="owner"></p><p id="defense" class="sub"></p>
+<section class="box"><div class="heading"><h2 id="target">성 정보</h2><small id="region"></small></div>
+<div class="content" id="details"><label>왕국 선택 <select id="targetSelect"></select></label><p id="owner"></p><p id="defense" class="sub"></p><p id="relation" class="label"></p>
 <div class="actions" id="diplomacy" hidden>
+<button data-action="alliance">수교 제안 <span>백성 간 교역 개시</span></button>
+<button data-action="break" hidden>수교 종료</button>
 <button data-action="trade">교역 제안 <span>내 식량 30 ↔ 상대 금화 24</span></button>
 <button data-action="truce">휴전 제안 <span>2분간 상호 공격 금지</span></button>
 <form id="attack" class="row"><label>출정 병력 <input class="units" id="units" type="number" min="10" value="30" required></label><button class="danger">출정</button></form>
@@ -49,195 +74,13 @@
 </aside>
 </main>
 </div>
-<script>
-const $=id=>document.getElementById(id);
-let token=localStorage.getItem('iron-crown-token')||'';
-let game, selected=0, offset=0, busy=false, lastLists={};
-const canvas=$('terrain'), ctx=canvas.getContext('2d');
-const land=document.createElement('canvas');
-land.width=1000; land.height=620;
-const art=land.getContext('2d');
-let seed=7321;
-function random(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;}
-function terrain(){
-  const grad=art.createLinearGradient(0,0,970,610);
-  grad.addColorStop(0,'#4b5338');grad.addColorStop(.52,'#394b36');grad.addColorStop(1,'#273b34');
-  art.fillStyle=grad;art.fillRect(0,0,1000,620);
-  for(let i=0;i<19000;i++){
-    art.fillStyle=i%2?'#121a1620':'#c7b98219';
-    art.fillRect(random()*1000,random()*620,1+random()*5,1+random()*2);
-  }
-  art.strokeStyle='#ac9b5f19';
-  for(let i=0;i<28;i++){
-    art.beginPath();
-    for(let x=0;x<=1000;x+=7){
-      const y=i*23+Math.sin(x/101+i*.4)*13+Math.sin(x/47)*4;
-      if(x===0)art.moveTo(x,y);else art.lineTo(x,y);
-    }
-    art.stroke();
-  }
-  art.beginPath();art.moveTo(635,-10);art.bezierCurveTo(595,158,661,155,604,255);
-  art.bezierCurveTo(523,364,799,429,747,640);
-  art.lineWidth=27;art.strokeStyle='#71827a';art.stroke();
-  art.lineWidth=20;art.strokeStyle='#425f62';art.stroke();
-  art.beginPath();art.ellipse(587,519,84,41,-.32,0,Math.PI*2);
-  art.fillStyle='#486a6b';art.fill();art.lineWidth=4;art.strokeStyle='#71827a';art.stroke();
-  for(let i=0;i<360;i++){
-    const x=random()*1000,y=random()*620;
-    if(!(x>685&&y>124&&y<480||x<207&&y>250||x>780&&y>509))continue;
-    const h=8+random()*13;
-    art.beginPath();art.moveTo(x,y-h);art.lineTo(x-h*.47,y);art.lineTo(x+h*.47,y);art.closePath();
-    art.fillStyle=i%2?'#25372a':'#324431';art.fill();
-    art.strokeStyle='#9b9e6a33';art.lineWidth=1;art.stroke();
-  }
-  for(let i=0;i<48;i++){
-    const x=130+random()*459,y=22+random()*131,h=15+random()*27;
-    art.beginPath();art.moveTo(x-h*.75,y);art.lineTo(x,y-h);art.lineTo(x+h*.8,y);
-    art.fillStyle=i%2?'#68705a':'#565f4b';art.fill();
-    art.beginPath();art.moveTo(x-h*.25,y-h*.67);art.lineTo(x,y-h);art.lineTo(x+h*.27,y-h*.67);
-    art.fillStyle='#a8ab8baa';art.fill();
-  }
-  const shade=art.createRadialGradient(510,307,190,510,307,620);
-  shade.addColorStop(0,'#161a1500');shade.addColorStop(1,'#171a14b9');
-  art.fillStyle=shade;art.fillRect(0,0,1000,620);
-}
-terrain();
-function clock(){return Date.now()+offset;}
-function seconds(end){return Math.max(0,Math.ceil((end-clock())/1000));}
-function draw(){
-  ctx.drawImage(land,0,0);
-  if(!game)return;
-  const pos=id=>[game.castles[id][2]*10,game.castles[id][3]*6.2];
-  ctx.lineWidth=2;ctx.strokeStyle='#d1b77e83';ctx.setLineDash([5,7]);
-  for(const [a,b] of [[0,1],[0,4],[1,2],[1,5],[2,5],[2,3],[3,4],[1,3]]){
-    ctx.beginPath();ctx.moveTo(...pos(a));ctx.lineTo(...pos(b));ctx.stroke();
-  }
-  ctx.setLineDash([]);
-  for(const m of game.marches){
-    const [x,y]=pos(m.from),[u,v]=pos(m.to);
-    const t=Math.max(0,Math.min(1,(clock()-m.start)/(m.end-m.start)));
-    ctx.strokeStyle='#ed9b81';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(u,v);ctx.stroke();
-    ctx.fillStyle='#ffd2a0';ctx.beginPath();ctx.arc(x+(u-x)*t,y+(v-y)*t,6,0,Math.PI*2);ctx.fill();
-  }
-}
-async function api(url,data){
-  const options={headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(4500)};
-  if(data){options.method='POST';options.headers['Content-Type']='application/json';options.body=JSON.stringify(data);}
-  const response=await fetch(url,options);
-  const result=await response.json();
-  if(!response.ok)throw Error(result.error);
-  return result;
-}
-const player=id=>game.players.find(p=>p.id===id);
-const castle=id=>game.castles[id][0];
-function set(id,value){$(id).textContent=value;}
-function list(key, value, update){
-  const text=JSON.stringify(value);
-  if(lastLists[key]!==text){lastLists[key]=text;update();}
-}
-function render(state){
-  game=state;offset=state.now-Date.now();
-  const me=player(game.me), q=player(selected), c=game.castles[selected];
-  const finished=game.winner!==null;
-  set('connection','● 서버 연결됨');set('occupancy',game.players.length+' / 6 영지 점유');
-  $('winner').hidden=!finished;
-  if(finished)set('winner',castle(game.winner)+'이 철의 왕관을 차지했습니다!');
-  $('lobby').hidden=!!me;$('estate').hidden=!me;
-  for(const stat of ['gold','food','army','fame'])set(stat,me ? (stat==='fame'?me.fame+' / 3':me[stat]) : '—');
-  list('map',game.players.map(p=>p.id),()=>{
-    $('markers').replaceChildren(...game.castles.map(([label,region,x,y,color],id)=>{
-      const button=document.createElement('button');
-      button.className='castle';button.style.left=x+'%';button.style.top=y+'%';button.style.setProperty('--flag',color);
-      const icon=document.createElement('i');icon.textContent='♜';icon.setAttribute('aria-hidden','true');
-      const title=document.createElement('b');title.textContent=label;
-      button.append(icon,title);button.onclick=()=>{
-        selected=id;
-        if(game.me===null&&!player(id))$('seat').value=id;
-        render(game);
-      };
-      return button;
-    }));
-    const existing=$('seat').value;
-    const vacant=game.castles.flatMap(([label],id)=>player(id)?[]:[new Option(label,id)]);
-    $('seat').replaceChildren(...vacant);
-    if(vacant.some(o=>o.value===existing)) $('seat').value=existing;
-  });
-  Array.from($('markers').children).forEach((button,id)=>button.setAttribute('aria-pressed',String(id===selected)));
-  $('joinButton').disabled=finished||!$('seat').options.length;
-  if(me){
-    set('home',castle(me.id));set('levels','농지 '+me.farm+'단계 · 성벽 '+me.wall+'단계');
-    set('farmCost',me.farm===5?'최고 단계':'금화 '+me.farm*55);
-    set('wallCost',me.wall===5?'최고 단계':'금화 '+me.wall*45);
-    for(const button of $('estate').querySelectorAll('button')){
-      const action=button.dataset.action;
-      button.disabled=finished||(action==='train'?me.gold<35||me.food<20:me[action]===5||me.gold<me[action]*(action==='farm'?55:45));
-    }
-  }
-  $('details').hidden=false;set('target',c[0]);set('region',c[1]);
-  set('owner',q?q.lord+' 영주':'빈 영지');
-  set('defense',q?'주둔 병력 '+q.army+' · 성벽 '+q.wall+'단계 · 방어력 '+(q.army+q.wall*6):'');
-  $('diplomacy').hidden=!me||!q||me.id===q.id||finished;
-  const pact=me&&q&&game.truces.find(t=>t.key===[me.id,q.id].sort().join(':'));
-  const marching=me&&game.marches.find(m=>m.from===me.id);
-  const incoming=me&&game.marches.find(m=>m.to===me.id);
-  $('units').max=me?.army??0;
-  $('attack').querySelector('button').disabled=!!(pact||marching||!me||me.army<10||me.food<25);
-  set('marchHint',incoming?'우리 성으로 적군 접근 중 · '+seconds(incoming.end)+'초':pact?'휴전 중 · '+seconds(pact.end)+'초':marching?'출정 중 · '+seconds(marching.end)+'초':'식량 25 · 12초 뒤 도착');
-  $('mail').hidden=!me||!game.offers.length||finished;
-  list('offers',game.offers,()=>{
-    $('offers').replaceChildren(...game.offers.map(o=>{
-      const div=document.createElement('div');div.className='offer';
-      const incoming=o.to===game.me;
-      const label=document.createElement('p');
-      label.textContent=castle(incoming?o.from:o.to)+(o.type==='trade'?' · 교역':' · 휴전')+(incoming?' 제안':' 응답 대기 중');
-      div.append(label);
-      if(incoming){
-        const terms=document.createElement('small');
-        terms.textContent=o.type==='trade'?'금화 24 지불 · 식량 30 획득':'2분간 상호 공격 금지';
-        const bar=document.createElement('div');bar.className='row';
-        for(const [type,label] of [['accept','수락'],['decline','거절']]){
-          const btn=document.createElement('button');btn.textContent=label;btn.onclick=()=>action({type,offer:o.id});bar.append(btn);
-        }
-        div.append(terms,bar);
-      }
-      return div;
-    }));
-  });
-  list('logs',game.logs,()=>{
-    $('logs').replaceChildren(...(game.logs.length?game.logs:['아직 기록이 없습니다.']).map(log=>{
-      const li=document.createElement('li');li.textContent=log;return li;
-    }));
-  });
-  set('harvest',finished?'—':seconds(game.harvest)+'초');
-  draw();
-}
-async function refresh(){
-  try{if(!busy){const result=await api('/state');if(!busy&&(!game||result.now>=game.now))render(result);}}
-  catch{set('connection','서버 재연결 중');}
-  finally{setTimeout(refresh,850);}
-}
-async function action(data){
-  if(busy)return;
-  busy=true;
-  try{render(await api('/action',data));set('feedback','명령을 처리했습니다.');}
-  catch(error){set('feedback',error.message);}
-  finally{busy=false;}
-}
-$('join').onsubmit=async event=>{
-  event.preventDefault();
-  if(busy)return;
-  busy=true;
-  try{
-    const result=await api('/join',{lord:$('lord').value,id:Number($('seat').value)});
-    token=result.token;localStorage.setItem('iron-crown-token',token);
-    selected=result.state.me;render(result.state);set('feedback','영지에 부임했습니다.');
-  }catch(error){set('feedback',error.message);}
-  finally{busy=false;}
-};
-$('seat').onchange=()=>{selected=Number($('seat').value);render(game);};
-$('attack').onsubmit=event=>{event.preventDefault();action({type:'attack',to:selected,units:Number($('units').value)});};
-document.querySelectorAll('[data-action]').forEach(button=>button.onclick=()=>action({type:button.dataset.action,to:selected}));
-draw();
-refresh();
-</script>
-</body></html>
+</div>
+<dialog class="modal" id="statsDialog">
+<div class="row"><h2>왕국 통계</h2><form method="dialog"><button>닫기</button></form></div>
+<p id="economicClock" class="sub"></p>
+<div class="scroll"><table><thead><tr><th scope="col">항목</th><th scope="col">내 왕국</th></tr></thead><tbody id="statRows"></tbody></table></div>
+<p class="sub">국민소득은 세후 판매 수익입니다. 판매 수익의 10%가 국고에 들어갑니다.</p>
+</dialog>
+<script type="module" src="./game.mjs"></script>
+</body>
+</html>

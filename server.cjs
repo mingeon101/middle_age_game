@@ -6,7 +6,7 @@ const { randomUUID } = require('node:crypto');
 
 const port = Number(process.env.PORT || 8080);
 const save = path.join(__dirname, 'realm-save.json');
-const page = fs.readFileSync(path.join(__dirname, 'index.html'));
+const page = fs.readFileSync(path.join(__dirname, 'lan-index.html'));
 const castles = [
   ['백사자성', '서부 평원', 25, 45, '#f5cd81'],
   ['흑철성', '북부 산맥', 49, 24, '#cab5f9'],
